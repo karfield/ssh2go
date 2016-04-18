@@ -315,9 +315,9 @@ func (s *Session) GetPort() int {
 // filename:
 // The options file to use, if "" the default ~/.ssh/config will be used.
 func (s *Session) ParseConfig(filename string) error {
-	filename_cstr := C.CString(filename)
-	defer C.free(unsafe.Pointer(filename_cstr))
-	if C.ssh_options_parse_config(s.ptr, filename_cstr) == SSH_OK {
+	filename_cstr := CString(filename)
+	defer filename_cstr.Free()
+	if C.ssh_options_parse_config(s.ptr, filename_cstr.Ptr) == SSH_OK {
 		return nil
 	}
 	return errors.New("Unable to parse ssh config")
@@ -402,8 +402,9 @@ func (s *Session) SetOption(optionType int, value interface{}) error {
 		if !ok {
 			return errors.New("Illegal value for setting option, requires string")
 		}
-		v = unsafe.Pointer(C.CString(val))
-		defer C.free(v)
+		_v := CString(val)
+		v = unsafe.Pointer(_v.Ptr)
+		defer _v.Free()
 	case SSH_OPTIONS_PORT:
 		val, ok := value.(int)
 		if !ok {
@@ -473,13 +474,13 @@ func (s *Session) SetOption(optionType int, value interface{}) error {
 // alwaysDisplay:
 //	Message SHOULD be displayed by the server. It SHOULD NOT be displayed unless debugging information has been explicitly requested
 func (s *Session) SendDebugMessage(message string, alwaysDisplay bool) error {
-	msg := C.CString(message)
-	defer C.free(unsafe.Pointer(msg))
+	msg := CString(message)
+	defer msg.Free()
 	var display C.int = 0
 	if alwaysDisplay {
 		display = 1
 	}
-	if C.ssh_send_debug(s.ptr, msg, display) != SSH_OK {
+	if C.ssh_send_debug(s.ptr, msg.Ptr, display) != SSH_OK {
 		return errors.New("send debug messaged failed")
 	}
 	return nil
@@ -489,9 +490,9 @@ func (s *Session) SendDebugMessage(message string, alwaysDisplay bool) error {
 //
 // Send a message that should be ignored.
 func (s *Session) SendIgnoreMessage(message string) error {
-	msg := C.CString(message)
-	defer C.free(unsafe.Pointer(msg))
-	if C.ssh_send_ignore(s.ptr, msg) != SSH_OK {
+	msg := CString(message)
+	defer msg.Free()
+	if C.ssh_send_ignore(s.ptr, msg.Ptr) != SSH_OK {
 		return errors.New("send ignored messaged failed")
 	}
 	return nil
@@ -506,22 +507,6 @@ func (s *Session) SetBlocking(blocking bool) {
 		value = 1
 	}
 	C.ssh_set_blocking(s.ptr, value)
-}
-
-type Counter struct {
-	InBytes    uint64
-	OutBytes   uint64
-	InPackets  uint64
-	OutPackets uint64
-}
-
-func (c Counter) toCCounter() C.ssh_counter {
-	return &C.struct_ssh_counter_struct{
-		in_bytes:    C.uint64_t(c.InBytes),
-		out_bytes:   C.uint64_t(c.OutBytes),
-		in_packets:  C.uint64_t(c.InPackets),
-		out_packets: C.uint64_t(c.OutPackets),
-	}
 }
 
 // Set the session data counters.
@@ -596,9 +581,9 @@ func (s *Session) GetAvailableAuthMethodsFromServer() int {
 // authentication. The username should only be set with ssh_options_set() only
 // before you connect to the server.
 func (s *Session) AuthWithUser(name string) error {
-	username := C.CString(name)
-	defer C.free(unsafe.Pointer(username))
-	return authError(C.ssh_userauth_agent(s.ptr, username))
+	username := CString(name)
+	defer username.Free()
+	return authError(C.ssh_userauth_agent(s.ptr, username.Ptr))
 }
 
 // Try to authenticate through the "gssapi-with-mic" method.
@@ -622,9 +607,9 @@ func (s *Session) AuthWithNone() error {
 // the password to UTF-8.
 //
 func (s *Session) AuthWithPassword(password string) error {
-	password_cstr := C.CString(password)
-	defer C.free(unsafe.Pointer(password_cstr))
-	return authError(C.ssh_userauth_password(s.ptr, nil, password_cstr))
+	password_cstr := CString(password)
+	defer password_cstr.Free()
+	return authError(C.ssh_userauth_password(s.ptr, nil, password_cstr.Ptr))
 }
 
 // Authenticate with public/private key or certificate.
@@ -643,8 +628,9 @@ func (s *Session) AuthWithPubkey(privateKey *Key) error {
 func (s *Session) AuthWithPubkeyAutomatically(passphrase string) error {
 	var passphrase_cstr *C.char
 	if passphrase != "" {
-		passphrase_cstr = C.CString(passphrase)
-		defer C.free(unsafe.Pointer(passphrase_cstr))
+		s := CString(passphrase)
+		defer s.Free()
+		passphrase_cstr = s.Ptr
 	}
 	return authError(C.ssh_userauth_publickey_auto(s.ptr, nil, passphrase_cstr))
 }
@@ -658,6 +644,42 @@ func (s *Session) TryAuthWithPubkey(pubkey *Key) error {
 	return authError(C.ssh_userauth_try_publickey(s.ptr, nil, pubkey.key))
 }
 
-func (s *Session) SetKeyboardInteractiveMode() error {
+// Try to authenticate through the "keyboard-interactive" method
+func (s *Session) AuthWithKeyboardInteractive() error {
 	return authError(C.ssh_userauth_kbdint(s.ptr, nil, nil))
+}
+
+func (s *Session) AuthKbdintGetAnswer(answer uint) string {
+	return C.GoString(C.ssh_userauth_kbdint_getanswer(s.ptr, C.uint(answer)))
+}
+
+func (s *Session) AuthKbdintGetInstruction() string {
+	return C.GoString(C.ssh_userauth_kbdint_getinstruction(s.ptr))
+}
+
+func (s *Session) AuthKbdintGetName() string {
+	return C.GoString(C.ssh_userauth_kbdint_getname(s.ptr))
+}
+
+func (s *Session) AuthKbdintGetNAnswers() int {
+	return int(C.ssh_userauth_kbdint_getnanswers(s.ptr))
+}
+
+func (s *Session) AuthKbdintGetNPrompts() int {
+	return int(C.ssh_userauth_kbdint_getnprompts(s.ptr))
+}
+
+func (s *Session) AuthKbdintGetPrompt(i int, echo string) string {
+	echo_cstr := CString(echo)
+	defer echo_cstr.Free()
+	return C.GoString(C.ssh_userauth_kbdint_getprompt(s.ptr, C.uint(i), echo_cstr.Ptr))
+}
+
+func (s *Session) AuthKbdintSetAnswer(i int, answer string) error {
+	answer_cstr := CString(answer)
+	defer answer_cstr.Free()
+	if C.ssh_userauth_kbdint_setanswer(s.ptr, C.uint(i), answer_cstr.Ptr) < 0 {
+		return errors.New("Fails to set auth key")
+	}
+	return nil
 }

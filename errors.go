@@ -13,12 +13,21 @@ type UnknownError struct{}
 
 func (e *UnknownError) Error() string { return "Unknown error" }
 
+type EOF struct{}
+
+func (e *EOF) Error() string { return "EOF" }
+
 func commonError(ret C.int) error {
+	if ret > 0 {
+		return nil
+	}
 	switch ret {
 	case SSH_OK:
 		return nil
 	case SSH_AGAIN:
 		return &TryAgainError{}
+	case SSH_EOF:
+		return &EOF{}
 	default:
 		return &UnknownError{}
 	}
@@ -61,6 +70,6 @@ func authError(err C.int) error {
 		// ssh_userauth_publickey().
 		return nil
 	default:
-		return &UnknownError{}
+		return commonError(err)
 	}
 }
