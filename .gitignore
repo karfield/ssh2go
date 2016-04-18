@@ -1,9 +1,8 @@
 
-bin
-pkg
-
 .go
 .DS_Store
 ._*
+
+vendor
 
 .*.swp
