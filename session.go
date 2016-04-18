@@ -13,6 +13,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"unsafe"
 )
 
@@ -36,13 +37,13 @@ func NewSession() (*Session, error) {
 // milliseconds. Specifying -1 means an infinite timeout. This parameter is
 // passed to the poll( function.)
 func (s *Session) BlockingFlush(timeout int) error {
-	return commonError(C.ssh_blocking_flush(s.ptr, C.int(timeout)))
+	return s.sessionError(C.ssh_blocking_flush(s.ptr, C.int(timeout)))
 }
 
 // Connect to the ssh server
 //
 func (s *Session) Connect() error {
-	return commonError(C.ssh_connect(s.ptr))
+	return s.sessionError(C.ssh_connect(s.ptr))
 }
 
 // Disconnect from a session (client or server).
@@ -169,7 +170,7 @@ func (s *Session) GetPollFlags() int {
 // Get the server public key from a session.
 func (s *Session) GetPubkey() (*Key, error) {
 	var key *C.ssh_key
-	err := commonError(C.ssh_get_publickey(s.ptr, key))
+	err := s.sessionError(C.ssh_get_publickey(s.ptr, key))
 	if err != nil {
 		return nil, err
 	}
@@ -682,4 +683,25 @@ func (s *Session) AuthKbdintSetAnswer(i int, answer string) error {
 		return errors.New("Fails to set auth key")
 	}
 	return nil
+}
+
+func (s *Session) GetErrorMsg() string {
+	err_cstr := C.ssh_get_error(unsafe.Pointer(s.ptr))
+	return C.GoString(err_cstr)
+}
+
+func (s *Session) GetErrorCode() int {
+	return int(C.ssh_get_error_code(unsafe.Pointer(s.ptr)))
+}
+
+func (s *Session) sessionError(err C.int) error {
+	switch err {
+	case SSH_OK:
+		return nil
+	case SSH_AGAIN:
+		return &TryAgainError{}
+	case SSH_ERROR:
+		return fmt.Errorf("%s (%d)", s.GetErrorMsg(), s.GetErrorCode())
+	}
+	return &UnknownError{}
 }

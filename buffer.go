@@ -69,7 +69,7 @@ func (b *Buffer) ReadAll() []byte {
 // Reinitialize a SSH buffer.
 func (b *Buffer) Reset() error {
 	if C.ssh_buffer_reinit(b.ptr) < 0 {
-		return errors.New("fails to reinitialize buffer")
+		return errors.New("Fails to reinitialize buffer")
 	}
 	return nil
 }

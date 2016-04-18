@@ -17,6 +17,18 @@ type EOF struct{}
 
 func (e *EOF) Error() string { return "EOF" }
 
+type RequestDenied struct{}
+
+func (e *RequestDenied) Error() string { return "Request denied" }
+
+type UnrecoverableError struct{}
+
+func (e *UnrecoverableError) Error() string { return "Fatal error" }
+
+type IntrruptedError struct{}
+
+func (e *IntrruptedError) Error() string { return "Interrupted error" }
+
 func commonError(ret C.int) error {
 	if ret > 0 {
 		return nil
@@ -28,9 +40,14 @@ func commonError(ret C.int) error {
 		return &TryAgainError{}
 	case SSH_EOF:
 		return &EOF{}
-	default:
-		return &UnknownError{}
+	case SSH_EINTR:
+		return &IntrruptedError{}
+	case SSH_FATAL:
+		return &UnrecoverableError{}
+	case SSH_REQUEST_DENIED:
+		return &RequestDenied{}
 	}
+	return &UnknownError{}
 }
 
 type AuthError struct{}
