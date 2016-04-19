@@ -1,6 +1,7 @@
 package libssh
 
 /*
+#cgo pkg-config: libssh
 #include <libssh/libssh.h>
 */
 import "C"

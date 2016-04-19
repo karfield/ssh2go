@@ -4,15 +4,12 @@ import "testing"
 
 func TestBuffer(t *testing.T) {
 	testdata := []byte{1, 2, 3, 4, 5, 6, 8, 9, 0}
-	buffer := NewBuffer()
-	if buffer == nil {
+	buffer, err := NewBuffer()
+	if err != nil {
 		t.Fatal("unable to allocate buffer")
 	}
 	defer buffer.Free()
-	err := buffer.AddData(testdata)
-	if err != nil {
-		t.Fatal(err)
-	}
+	buffer.AddData(testdata)
 	read := buffer.ReadAll()
 	if len(read) != len(testdata) {
 		t.Fatalf("read length: %d, expected: %d", len(read), len(testdata))

@@ -1,13 +1,13 @@
 package libssh
 
 /*
+#cgo pkg-config: libssh
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <libssh/libssh.h>
-
 */
 import "C"
 
@@ -21,11 +21,11 @@ type Session struct {
 	ptr C.ssh_session
 }
 
-func NewSession() (*Session, error) {
-	session := &Session{}
+func NewSession() (Session, error) {
+	session := Session{}
 	session.ptr = C.ssh_new()
 	if session.ptr == nil {
-		return nil, errors.New("Unable to allocate ssh session")
+		return session, errors.New("ssh_new() == nil")
 	}
 	return session, nil
 }
@@ -36,30 +36,30 @@ func NewSession() (*Session, error) {
 // Set an upper limit on the time for which this function will block, in
 // milliseconds. Specifying -1 means an infinite timeout. This parameter is
 // passed to the poll( function.)
-func (s *Session) BlockingFlush(timeout int) error {
+func (s Session) BlockingFlush(timeout int) error {
 	return s.sessionError(C.ssh_blocking_flush(s.ptr, C.int(timeout)))
 }
 
 // Connect to the ssh server
 //
-func (s *Session) Connect() error {
+func (s Session) Connect() error {
 	return s.sessionError(C.ssh_connect(s.ptr))
 }
 
 // Disconnect from a session (client or server).
 //
 // The session can then be reused to open a new session.
-func (s *Session) Disconnect() {
+func (s Session) Disconnect() {
 	C.ssh_disconnect(s.ptr)
 }
 
 // Deallocate a SSH session handle.
-func (s *Session) Free() {
+func (s Session) Free() {
 	C.ssh_free(s.ptr)
 }
 
 // get the name of the input cipher for the given session.
-func (s *Session) GetCipherIn() string {
+func (s Session) GetCipherIn() string {
 	ciphername := C.ssh_get_cipher_in(s.ptr)
 	if ciphername == nil {
 		return ""
@@ -68,7 +68,7 @@ func (s *Session) GetCipherIn() string {
 }
 
 // get the name of the output cipher for the given session
-func (s *Session) GetCipherOut() string {
+func (s Session) GetCipherOut() string {
 	ciphername := C.ssh_get_cipher_out(s.ptr)
 	if ciphername == nil {
 		return ""
@@ -77,7 +77,7 @@ func (s *Session) GetCipherOut() string {
 }
 
 // get the client banner
-func (s *Session) GetClientBanner() string {
+func (s Session) GetClientBanner() string {
 	banner := C.ssh_get_clientbanner(s.ptr)
 	if banner == nil {
 		return ""
@@ -87,7 +87,7 @@ func (s *Session) GetClientBanner() string {
 
 // Get the disconnect message from the server.
 //
-func (s *Session) GetDisconnectMessage() string {
+func (s Session) GetDisconnectMessage() string {
 	message := C.ssh_get_disconnect_message(s.ptr)
 	if message == nil {
 		return ""
@@ -99,7 +99,7 @@ func (s *Session) GetDisconnectMessage() string {
 //
 // In case you'd need the file descriptor of the connection to the
 // server/client.
-func (s *Session) GetFd() int {
+func (s Session) GetFd() int {
 	socketFd := C.ssh_get_fd(s.ptr)
 	return int(socketFd)
 }
@@ -107,7 +107,7 @@ func (s *Session) GetFd() int {
 // get the name of the input HMAC algorithm for the given session.
 //
 // Returns HMAC algorithm name or "" if unknown.
-func (s *Session) GetHMacIn() string {
+func (s Session) GetHMacIn() string {
 	name := C.ssh_get_hmac_in(s.ptr)
 	if name == nil {
 		return ""
@@ -118,7 +118,7 @@ func (s *Session) GetHMacIn() string {
 // get the name of the output HMAC algorithm for the given session.
 //
 // Returns HMAC algorithm name or "" if unknown.
-func (s *Session) GetHMacOut() string {
+func (s Session) GetHMacOut() string {
 	name := C.ssh_get_hmac_out(s.ptr)
 	if name == nil {
 		return ""
@@ -133,7 +133,7 @@ func (s *Session) GetHMacOut() string {
 // This is the banner showing a disclaimer to users who log in, typically their right or the fact that they will be monitored.
 //
 // Return A newly allocated string with the banner, "" on error.
-func (s *Session) GetIssueBanner() string {
+func (s Session) GetIssueBanner() string {
 	banner := C.ssh_get_issue_banner(s.ptr)
 	if banner == nil {
 		return ""
@@ -144,14 +144,14 @@ func (s *Session) GetIssueBanner() string {
 // GetKeyExchangeAlgorithm()
 //
 // get the name of the current key exchange algorithm.
-func (s *Session) GetKeyExchangeAlgorithm() string {
+func (s Session) GetKeyExchangeAlgorithm() string {
 	algorithm := C.ssh_get_kex_algo(s.ptr)
 	return C.GoString(algorithm)
 }
 
 // Get the version of the OpenSSH server, if it is not an OpenSSH server then 0
 // will be returned.
-func (s *Session) GetOpensshVersion() int {
+func (s Session) GetOpensshVersion() int {
 	return int(C.ssh_get_openssh_version(s.ptr))
 }
 
@@ -161,14 +161,14 @@ func (s *Session) GetOpensshVersion() int {
 // Return A bitmask including SSH_READ_PENDING or SSH_WRITE_PENDING.
 // For SSH_READ_PENDING, your invocation of poll( should include POLLIN.
 // For SSH_WRITE_PENDING, your invocation of poll( should include POLLOUT))
-func (s *Session) GetPollFlags() int {
+func (s Session) GetPollFlags() int {
 	return int(C.ssh_get_poll_flags(s.ptr))
 }
 
 // GetPubkey()
 //
 // Get the server public key from a session.
-func (s *Session) GetPubkey() (*Key, error) {
+func (s Session) GetPubkey() (*Key, error) {
 	var key *C.ssh_key
 	err := s.sessionError(C.ssh_get_publickey(s.ptr, key))
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *Session) GetPubkey() (*Key, error) {
 // GetServerBanner()
 //
 // get the server banner
-func (s *Session) GetServerBanner() string {
+func (s Session) GetServerBanner() string {
 	banner := C.ssh_get_serverbanner(s.ptr)
 	if banner == nil {
 		return ""
@@ -195,7 +195,7 @@ func (s *Session) GetServerBanner() string {
 // return A bitmask including SSH_CLOSED, SSH_READ_PENDING, SSH_WRITE_PENDING or
 // SSH_CLOSED_ERROR which respectively means the session is closed, has data to
 // read on the connection socket and session was closed due to an error.
-func (s *Session) GetStatus() int {
+func (s Session) GetStatus() int {
 	return int(C.ssh_get_status(s.ptr))
 }
 
@@ -204,21 +204,21 @@ func (s *Session) GetStatus() int {
 // Get the protocol version of the session.
 //
 // return 1 or 2, for ssh1 or ssh2, < 0 on error.
-func (s *Session) GetVersion() int {
+func (s Session) GetVersion() int {
 	return int(C.ssh_get_version(s.ptr))
 }
 
 // IsBlocking()
 //
 // Return the blocking mode of libssh.
-func (s *Session) IsBlocking() bool {
+func (s Session) IsBlocking() bool {
 	return C.ssh_is_blocking(s.ptr) == 1
 }
 
 // IsConnected()
 //
 // Check if we are connected.
-func (s *Session) IsConnected() bool {
+func (s Session) IsConnected() bool {
 	return C.ssh_is_connected(s.ptr) == 1
 }
 
@@ -234,7 +234,7 @@ func (s *Session) IsConnected() bool {
 // SSH_SERVER_NOT_KNOWN: The server is unknown. User should confirm the MD5 is correct.
 // SSH_SERVER_FILE_NOT_FOUND: The known host file does not exist. The host is thus unknown. File will be created if host key is accepted.
 // SSH_SERVER_ERROR: Some error happened.
-func (s *Session) IsServerKnown() int {
+func (s Session) IsServerKnown() int {
 	return int(C.ssh_is_server_known(s.ptr))
 }
 
@@ -244,12 +244,13 @@ func (s *Session) IsServerKnown() int {
 // If you make several sessions with the same options this is useful. You cannot
 // use twice the same option structure in ssh_session_connect.
 //
-func (s *Session) Duplicate() (*Session, error) {
-	var ptr *C.ssh_session
-	if C.ssh_options_copy(s.ptr, ptr) == 0 {
-		return &Session{*ptr}, nil
+func (s Session) Duplicate() (Session, error) {
+	sess := Session{}
+	if rc := C.ssh_options_copy(s.ptr, &sess.ptr); rc == 0 {
+		return sess, nil
+	} else {
+		return sess, fmt.Errorf("ssh_channel_get_session() == %d", rc)
 	}
-	return nil, errors.New("Unable to duplicate session")
 }
 
 // GetOption()
@@ -281,7 +282,7 @@ func (s *Session) Duplicate() (*Session, error) {
 // * SSH_OPTIONS_PROXYCOMMAND: Get the proxycommand necessary to log into the
 // remote host. When not explicitly set, it will be read from the ~/.ssh/config
 // file
-func (s *Session) GetOption(optionType int) string {
+func (s Session) GetOption(optionType int) string {
 	var option **C.char
 	if C.ssh_options_get(s.ptr, C.enum_ssh_options_e(optionType), option) == SSH_OK {
 		defer C.ssh_string_free_char(*option)
@@ -297,7 +298,7 @@ func (s *Session) GetOption(optionType int) string {
 // session options have been automatically inferred from the environment or
 // configuration files and one
 //
-func (s *Session) GetPort() int {
+func (s Session) GetPort() int {
 	var port *C.uint
 	if C.ssh_options_get_port(s.ptr, port) == SSH_OK {
 		return int(*port)
@@ -315,7 +316,7 @@ func (s *Session) GetPort() int {
 //
 // filename:
 // The options file to use, if "" the default ~/.ssh/config will be used.
-func (s *Session) ParseConfig(filename string) error {
+func (s Session) ParseConfig(filename string) error {
 	filename_cstr := CString(filename)
 	defer filename_cstr.Free()
 	if C.ssh_options_parse_config(s.ptr, filename_cstr.Ptr) == SSH_OK {
@@ -395,7 +396,7 @@ func (s *Session) ParseConfig(filename string) error {
 // SSH_OPTIONS_GSSAPI_CLIENT_IDENTITY Set it to specify the GSSAPI client identity that libssh should expect when connecting to the server (const char *).
 // SSH_OPTIONS_GSSAPI_DELEGATE_CREDENTIALS Set it to specify that GSSAPI should delegate credentials to the server (int, 0 = false).
 
-func (s *Session) SetOption(optionType int, value interface{}) error {
+func (s Session) SetOption(optionType int, value interface{}) error {
 	var v unsafe.Pointer
 	switch optionType {
 	default:
@@ -474,7 +475,7 @@ func (s *Session) SetOption(optionType int, value interface{}) error {
 //
 // alwaysDisplay:
 //	Message SHOULD be displayed by the server. It SHOULD NOT be displayed unless debugging information has been explicitly requested
-func (s *Session) SendDebugMessage(message string, alwaysDisplay bool) error {
+func (s Session) SendDebugMessage(message string, alwaysDisplay bool) error {
 	msg := CString(message)
 	defer msg.Free()
 	var display C.int = 0
@@ -490,7 +491,7 @@ func (s *Session) SendDebugMessage(message string, alwaysDisplay bool) error {
 // SendIgnoreMessage()
 //
 // Send a message that should be ignored.
-func (s *Session) SendIgnoreMessage(message string) error {
+func (s Session) SendIgnoreMessage(message string) error {
 	msg := CString(message)
 	defer msg.Free()
 	if C.ssh_send_ignore(s.ptr, msg.Ptr) != SSH_OK {
@@ -502,7 +503,7 @@ func (s *Session) SendIgnoreMessage(message string) error {
 // SetBlocking()
 //
 // Set the session in blocking/nonblocking mode
-func (s *Session) SetBlocking(blocking bool) {
+func (s Session) SetBlocking(blocking bool) {
 	var value C.int = 0
 	if blocking {
 		value = 1
@@ -522,29 +523,29 @@ func (s *Session) SetBlocking(blocking bool) {
 // Counter for byte and packet data handled by the session, prior compression
 // and SSH overhead.
 
-func (s *Session) SetCounter(scounter, rcounter Counter) {
+func (s Session) SetCounter(scounter, rcounter Counter) {
 	C.ssh_set_counters(s.ptr, scounter.toCCounter(), rcounter.toCCounter())
 }
 
 // Tell the session it has an exception to catch on the file descriptor.
-func (s *Session) SetFdExcept() {
+func (s Session) SetFdExcept() {
 	C.ssh_set_fd_except(s.ptr)
 }
 
 // Tell the session it has data to read on the file descriptor without blocking.
-func (s *Session) SetFdToRead() {
+func (s Session) SetFdToRead() {
 	C.ssh_set_fd_toread(s.ptr)
 }
 
 // Tell the session it may write to the file descriptor without blocking.
-func (s *Session) SetFdToWrite() {
+func (s Session) SetFdToWrite() {
 	C.ssh_set_fd_towrite(s.ptr)
 }
 
 // Disconnect impolitely from a remote host by closing the socket.
 //
 // Suitable if you forked and want to destroy this session.
-func (s *Session) SilentDisconnect() {
+func (s Session) SilentDisconnect() {
 	C.ssh_silent_disconnect(s.ptr)
 }
 
@@ -552,149 +553,23 @@ func (s *Session) SilentDisconnect() {
 //
 // This will create the known hosts file if it does not exist. You generaly use
 // it when ssh_is_server_known() answered SSH_SERVER_NOT_KNOWN.
-func (s *Session) WriteKnownHost() error {
+func (s Session) WriteKnownHost() error {
 	if C.ssh_write_knownhost(s.ptr) != SSH_OK {
 		return errors.New("Unable to save current server as in known list")
 	}
 	return nil
 }
 
-// auth-stuff
-
-// Get available authentication methods from the server.
-// This requires the function ssh_userauth_none() to be called before the methods
-// are available. The server MAY return a list of methods that may continue.
-//
-// Returns
-//  A bitfield of the fllowing values:
-//  SSH_AUTH_METHOD_PASSWORD
-//  SSH_AUTH_METHOD_PUBLICKEY
-//  SSH_AUTH_METHOD_HOSTBASED
-//  SSH_AUTH_METHOD_INTERACTIVE
-func (s *Session) GetAvailableAuthMethodsFromServer() int {
-	return int(C.ssh_userauth_list(s.ptr, nil))
-}
-
-// Try to do public key authentication with ssh agent.
-//
-// Note:
-// Most server implementations do not permit changing the username during
-// authentication. The username should only be set with ssh_options_set() only
-// before you connect to the server.
-func (s *Session) AuthWithUser(name string) error {
-	username := CString(name)
-	defer username.Free()
-	return authError(C.ssh_userauth_agent(s.ptr, username.Ptr))
-}
-
-// Try to authenticate through the "gssapi-with-mic" method.
-func (s *Session) AuthWithGassapi() error {
-	return authError(C.ssh_userauth_gssapi(s.ptr))
-}
-
-// Try to authenticate through the "none" method.
-func (s *Session) AuthWithNone() error {
-	return authError(C.ssh_userauth_none(s.ptr, nil))
-}
-
-// Try to authenticate by password
-//
-// This authentication method is normally disabled on SSHv2 server. You should
-// use keyboard-interactive mode.
-//
-// The 'password' value MUST be encoded UTF-8. It is up to the server how to
-// interpret the password and validate it against the password database.
-// However, if you read the password in some other encoding, you MUST convert
-// the password to UTF-8.
-//
-func (s *Session) AuthWithPassword(password string) error {
-	password_cstr := CString(password)
-	defer password_cstr.Free()
-	return authError(C.ssh_userauth_password(s.ptr, nil, password_cstr.Ptr))
-}
-
-// Authenticate with public/private key or certificate.
-func (s *Session) AuthWithPubkey(privateKey *Key) error {
-	return authError(C.ssh_userauth_publickey(s.ptr, nil, privateKey.key))
-}
-
-// Tries to automatically authenticate with public key and "none".
-//
-// It may fail, for instance it doesn't ask for a password and uses a default
-// asker for passphrases (in case the private key is encrypted)
-//
-// passphrase:
-// Use this passphrase to unlock the privatekey. Use NULL if you don't want to
-// use a passphrase or the user should be asked.
-func (s *Session) AuthWithPubkeyAutomatically(passphrase string) error {
-	var passphrase_cstr *C.char
-	if passphrase != "" {
-		s := CString(passphrase)
-		defer s.Free()
-		passphrase_cstr = s.Ptr
-	}
-	return authError(C.ssh_userauth_publickey_auto(s.ptr, nil, passphrase_cstr))
-}
-
-// Try to authenticate with the given public key.
-//
-// To avoid unnecessary processing and user interaction, the following method is
-// provided for querying whether authentication using the 'pubkey' would be
-// possible
-func (s *Session) TryAuthWithPubkey(pubkey *Key) error {
-	return authError(C.ssh_userauth_try_publickey(s.ptr, nil, pubkey.key))
-}
-
-// Try to authenticate through the "keyboard-interactive" method
-func (s *Session) AuthWithKeyboardInteractive() error {
-	return authError(C.ssh_userauth_kbdint(s.ptr, nil, nil))
-}
-
-func (s *Session) AuthKbdintGetAnswer(answer uint) string {
-	return C.GoString(C.ssh_userauth_kbdint_getanswer(s.ptr, C.uint(answer)))
-}
-
-func (s *Session) AuthKbdintGetInstruction() string {
-	return C.GoString(C.ssh_userauth_kbdint_getinstruction(s.ptr))
-}
-
-func (s *Session) AuthKbdintGetName() string {
-	return C.GoString(C.ssh_userauth_kbdint_getname(s.ptr))
-}
-
-func (s *Session) AuthKbdintGetNAnswers() int {
-	return int(C.ssh_userauth_kbdint_getnanswers(s.ptr))
-}
-
-func (s *Session) AuthKbdintGetNPrompts() int {
-	return int(C.ssh_userauth_kbdint_getnprompts(s.ptr))
-}
-
-func (s *Session) AuthKbdintGetPrompt(i int, echo string) string {
-	echo_cstr := CString(echo)
-	defer echo_cstr.Free()
-	return C.GoString(C.ssh_userauth_kbdint_getprompt(s.ptr, C.uint(i), echo_cstr.Ptr))
-}
-
-func (s *Session) AuthKbdintSetAnswer(i int, answer string) error {
-	answer_cstr := CString(answer)
-	defer answer_cstr.Free()
-	if C.ssh_userauth_kbdint_setanswer(s.ptr, C.uint(i), answer_cstr.Ptr) < 0 {
-		return errors.New("Fails to set auth key")
-	}
-	return nil
-}
-
-func (s *Session) GetErrorMsg() string {
+func (s Session) GetErrorMsg() string {
 	err_cstr := C.ssh_get_error(unsafe.Pointer(s.ptr))
 	return C.GoString(err_cstr)
 }
 
-func (s *Session) GetErrorCode() int {
+func (s Session) GetErrorCode() int {
 	return int(C.ssh_get_error_code(unsafe.Pointer(s.ptr)))
 }
 
-func (s *Session) sessionError(err C.int) error {
+func (s Session) sessionError(err C.int) error {
 	switch err {
 	case SSH_OK:
 		return nil
