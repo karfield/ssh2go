@@ -46,7 +46,9 @@ git submodule update --init --recursive
 
 ## simple-sshd
 
-Custom a sshd, and run it locally, Try it:
+Custom a sshd, and run it locally.
+
+Try now or read the [code](https://github.com/karfield/ssh2go/blob/master/examples/ssh2go-simple-sshd/main.go)
 
 ```
 go install github.com/karfield/ssh2go/examples/ssh2go-simple-sshd
@@ -76,5 +78,5 @@ ssh localhost -p 8888 -l test
 
 Note:
 
-granteed user and password: test / test
+granted user and password: test / test
 
