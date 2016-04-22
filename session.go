@@ -8,6 +8,7 @@ package libssh
 #include <inttypes.h>
 #include <sys/types.h>
 #include <libssh/libssh.h>
+#include <libssh/server.h>
 */
 import "C"
 
@@ -37,13 +38,13 @@ func NewSession() (Session, error) {
 // milliseconds. Specifying -1 means an infinite timeout. This parameter is
 // passed to the poll( function.)
 func (s Session) BlockingFlush(timeout int) error {
-	return s.sessionError(C.ssh_blocking_flush(s.ptr, C.int(timeout)))
+	return s.apiError("ssh_blocking_flush", C.ssh_blocking_flush(s.ptr, C.int(timeout)))
 }
 
 // Connect to the ssh server
 //
 func (s Session) Connect() error {
-	return s.sessionError(C.ssh_connect(s.ptr))
+	return s.apiError("ssh_connect", C.ssh_connect(s.ptr))
 }
 
 // Disconnect from a session (client or server).
@@ -168,9 +169,9 @@ func (s Session) GetPollFlags() int {
 // GetPubkey()
 //
 // Get the server public key from a session.
-func (s Session) GetPubkey() (*Key, error) {
+func (s Session) GetPublickey() (*Key, error) {
 	var key *C.ssh_key
-	err := s.sessionError(C.ssh_get_publickey(s.ptr, key))
+	err := s.apiError("ssh_get_publickey", C.ssh_get_publickey(s.ptr, key))
 	if err != nil {
 		return nil, err
 	}
@@ -569,14 +570,19 @@ func (s Session) GetErrorCode() int {
 	return int(C.ssh_get_error_code(unsafe.Pointer(s.ptr)))
 }
 
-func (s Session) sessionError(err C.int) error {
+func (s Session) apiError(fn string, err C.int) error {
 	switch err {
 	case SSH_OK:
 		return nil
 	case SSH_AGAIN:
-		return &TryAgainError{}
+		return apiError(fn, "SSH_AGAIN")
 	case SSH_ERROR:
-		return fmt.Errorf("%s (%d)", s.GetErrorMsg(), s.GetErrorCode())
+		return apiError(fn, fmt.Sprintf("%s (%d)", s.GetErrorMsg(), s.GetErrorCode()))
 	}
-	return &UnknownError{}
+	return apiError(fn, err)
+}
+
+func (s Session) SendKeepAlive() error {
+	return apiError("ssh_send_keepalive",
+		C.ssh_send_keepalive(s.ptr))
 }

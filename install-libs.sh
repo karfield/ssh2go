@@ -46,6 +46,7 @@ cmake \
     -DWITH_STATIC_LIB=ON \
     -DWITH_GSSAPI=OFF \
     -DWITH_GCRYPT=ON \
+    -DWITH_SERVER=ON \
     ..
 make
 make DESTDIR=$INSTALLDIR install

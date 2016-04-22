@@ -28,17 +28,6 @@ func (e Event) Free() {
 	C.ssh_event_free(e.event)
 }
 
-func (e Event) eventError(err C.int) error {
-	switch err {
-	case SSH_OK:
-		return nil
-	case SSH_ERROR:
-		fallthrough
-	default:
-		return &InternalError{}
-	}
-}
-
 type EventCallback interface {
 	OnSshEvent(socketFd int, revents int) int
 }
@@ -57,14 +46,15 @@ func (e Event) AddFd(socketFd int, pollEvents int, callback EventCallback) error
 		}
 		return 0
 	}
-	return e.eventError(C.ssh_event_add_fd(e.event, C.socket_t(socketFd), C.short(pollEvents),
-		C.ssh_event_callback(unsafe.Pointer(&cbwrapper)), nil))
+	return apiError("ssh_event_add_fd",
+		C.ssh_event_add_fd(e.event, C.socket_t(socketFd), C.short(pollEvents),
+			C.ssh_event_callback(unsafe.Pointer(&cbwrapper)), nil))
 }
 
 // remove the poll handle from session and assign them to a event, when used in
 // blocking mode.
 func (e Event) AddSession(session Session) error {
-	return e.eventError(C.ssh_event_add_session(e.event, session.ptr))
+	return apiError("ssh_event_add_session", C.ssh_event_add_session(e.event, session.ptr))
 }
 
 // Poll all the sockets and sessions associated through an event object.
@@ -83,10 +73,10 @@ func (e Event) AddSession(session Session) error {
 
 // Remove a socket fd from an event context.
 func (e Event) RemoveFd(fd int) error {
-	return e.eventError(C.ssh_event_remove_fd(e.event, C.socket_t(fd)))
+	return apiError("ssh_event_remove_fd", C.ssh_event_remove_fd(e.event, C.socket_t(fd)))
 }
 
 // Remove a session object from an event context.
 func (e Event) RemoveSession(session Session) error {
-	return e.eventError(C.ssh_event_remove_session(e.event, session.ptr))
+	return apiError("ssh_event_remove_session", C.ssh_event_remove_session(e.event, session.ptr))
 }

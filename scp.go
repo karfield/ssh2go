@@ -33,7 +33,7 @@ func (s Session) NewScp(mode int, location string) (Scp, error) {
 
 // Initialize the scp channel.
 func (s Scp) Init() error {
-	return s.scpError(C.ssh_scp_init(s.scp))
+	return apiError("ssh_scp_init", C.ssh_scp_init(s.scp))
 }
 
 // Free a scp context.
@@ -43,17 +43,7 @@ func (s Scp) Free() {
 
 // Close the scp channel.
 func (s Scp) Close() error {
-	return s.scpError(C.ssh_scp_close(s.scp))
-}
-
-func (s Scp) scpError(err C.int) error {
-	switch err {
-	case SSH_OK:
-		return nil
-	case SSH_AGAIN:
-		return &TryAgainError{}
-	}
-	return &UnknownError{}
+	return apiError("ssh_scp_close", C.ssh_scp_close(s.scp))
 }
 
 // Wait for a scp request (file, directory).
@@ -78,7 +68,8 @@ func (s Scp) PullRequest() int {
 func (s Scp) PushDirectory(dirname string, mode int) error {
 	dirname_cstr := CString(dirname)
 	defer dirname_cstr.Free()
-	return s.scpError(C.ssh_scp_push_directory(s.scp, dirname_cstr.Ptr, C.int(mode)))
+	return apiError("ssh_scp_push_directory",
+		C.ssh_scp_push_directory(s.scp, dirname_cstr.Ptr, C.int(mode)))
 }
 
 // Initialize the sending of a file to a scp in sink mode.
@@ -92,14 +83,16 @@ func (s Scp) PushDirectory(dirname string, mode int) error {
 func (s Scp) PushFile(filename string, size uint, mode int) error {
 	filename_cstr := CString(filename)
 	defer filename_cstr.Free()
-	return s.scpError(C.ssh_scp_push_file(s.scp, filename_cstr.Ptr, C.size_t(size), C.int(mode)))
+	return apiError("ssh_scp_push_file",
+		C.ssh_scp_push_file(s.scp, filename_cstr.Ptr, C.size_t(size), C.int(mode)))
 }
 
 // Initialize the sending of a file to a scp in sink mode, using a 64-bit size.
 func (s Scp) PushFile64(filename string, size uint64, mode int) error {
 	filename_cstr := CString(filename)
 	defer filename_cstr.Free()
-	return s.scpError(C.ssh_scp_push_file64(s.scp, filename_cstr.Ptr, C.uint64_t(size), C.int(mode)))
+	return apiError("ssh_scp_push_file64",
+		C.ssh_scp_push_file64(s.scp, filename_cstr.Ptr, C.uint64_t(size), C.int(mode)))
 }
 
 // Read from a remote scp file.
@@ -109,10 +102,10 @@ func (s Scp) PushFile64(filename string, size uint64, mode int) error {
 func (s Scp) Read(size uint) ([]byte, error) {
 	buf := make([]byte, size)
 	ret := C.ssh_scp_read(s.scp, unsafe.Pointer(&buf[0]), C.size_t(size))
-	if ret > 0 {
-		return buf[0:ret], nil
+	if ret < 0 {
+		return nil, apiError("ssh_scp_read", ret)
 	}
-	return nil, s.scpError(ret)
+	return buf[0:ret], nil
 }
 
 // Get the name of the directory or file being pushed from the other party.
@@ -147,5 +140,6 @@ func (s Scp) GetWarning() string {
 
 // Write into a remote scp file.
 func (s Scp) Write(data []byte) error {
-	return s.scpError(C.ssh_scp_write(s.scp, unsafe.Pointer(&data[0]), C.size_t(len(data))))
+	return apiError("ssh_scp_write",
+		C.ssh_scp_write(s.scp, unsafe.Pointer(&data[0]), C.size_t(len(data))))
 }

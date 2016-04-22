@@ -13,7 +13,11 @@ unsigned char get_buffer_by_index(unsigned char *buf, int index) {
 }
 */
 import "C"
-import "unsafe"
+import (
+	"fmt"
+	"strconv"
+	"unsafe"
+)
 
 type CStringWrapper struct {
 	Ptr *C.char
@@ -80,4 +84,41 @@ func copyData(data interface{}, len interface{}) []byte {
 		buf[i] = byte(C.get_buffer_by_index(ptr, C.int(i)))
 	}
 	return buf
+}
+
+type SshApiError struct {
+	fn  string
+	err string
+}
+
+func (e *SshApiError) Error() string {
+	return fmt.Sprintf("libssh call %s() returns %s", e.fn, e.err)
+}
+
+func apiError(fn string, err interface{}) error {
+	errno := 0
+	if e, ok := err.(C.int); ok {
+		errno = int(e)
+	} else if e1, ok := err.(C.size_t); ok {
+		errno = int(e1)
+	} else if e3, ok := err.(int); ok {
+		errno = e3
+	} else if estr, ok := err.(string); ok {
+		return &SshApiError{fn, estr}
+	} else if e4, ok := err.(C.socket_t); ok {
+		errno = int(e4)
+	} else {
+		return nil
+	}
+	if errno < 0 {
+		return &SshApiError{fn, strconv.Itoa(errno)}
+	}
+	return nil
+}
+
+func apiErrorWithNullString(fn string, result *C.char) (string, error) {
+	if result == nil {
+		return "", apiError(fn, "NULL")
+	}
+	return C.GoString(result), nil
 }

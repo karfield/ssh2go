@@ -14,7 +14,7 @@ ssh2go depends on libssh, so make sure you've installed the **Lastest** git vers
 ### use homebrew
 
 ```
-brew install --HEAD libssh
+brew install --HEAD https://raw.githubusercontent.com/karfield/ssh2go/master/libssh.rb
 
 go get github.com/karfield/ssh2go
 ```

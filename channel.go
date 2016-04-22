@@ -8,16 +8,27 @@ package libssh
 #include <inttypes.h>
 #include <sys/types.h>
 #include <libssh/libssh.h>
+#include <libssh/server.h>
 
 */
 import "C"
-import (
-	"errors"
-	"unsafe"
-)
+import "unsafe"
 
 type Channel struct {
 	ptr C.ssh_channel
+}
+
+func (c Channel) convertError(fn string, err C.int) error {
+	switch err {
+	case SSH_OK:
+		return nil
+	case SSH_AGAIN:
+		return apiError(fn, "SSH_AGAIN")
+	case SSH_ERROR:
+		fallthrough
+	default:
+		return apiError(fn, err)
+	}
 }
 
 func (s Session) NewChannel() (Channel, error) {
@@ -25,7 +36,7 @@ func (s Session) NewChannel() (Channel, error) {
 	ch.ptr = C.ssh_channel_new(s.ptr)
 	var err error
 	if ch.ptr == nil {
-		err = errors.New("ssh_channel_new() == nil")
+		err = apiError("ssh_channel_new", "NULL")
 	}
 	return ch, err
 }
@@ -42,7 +53,7 @@ func (s Session) AcceptForward(timeoutMs int, port int) (Channel, error) {
 	ch.ptr = C.ssh_channel_accept_forward(s.ptr, C.int(timeoutMs), port_ptr)
 	var err error
 	if ch.ptr == nil {
-		err = errors.New("ssh_channel_accept_forward() == nil")
+		err = apiError("ssh_channel_accept_forward", "NULL")
 	}
 	return ch, err
 }
@@ -52,7 +63,7 @@ func (c Channel) AcceptX11(timeoutMs int) (Channel, error) {
 	ch := Channel{}
 	ch.ptr = C.ssh_channel_accept_x11(c.ptr, C.int(timeoutMs))
 	if ch.ptr == nil {
-		return ch, errors.New("ssh_channel_accept_x11() == nil")
+		return ch, apiError("ssh_channel_accept_x11", "NULL")
 	}
 	return ch, nil
 }
@@ -62,7 +73,8 @@ func (c Channel) AcceptX11(timeoutMs int) (Channel, error) {
 func (s Session) CancelForward(address string, port int) error {
 	address_cstr := CString(address)
 	defer address_cstr.Free()
-	return s.sessionError(C.ssh_channel_cancel_forward(s.ptr, address_cstr.Ptr, C.int(port)))
+	return s.apiError("ssh_channel_cancel_forward",
+		C.ssh_channel_cancel_forward(s.ptr, address_cstr.Ptr, C.int(port)))
 }
 
 // Sends the "tcpip-forward" global request to ask the server to begin listening
@@ -81,7 +93,8 @@ func (s Session) ListenForward(address string, port int) (int, error) {
 	address_cstr := CString(address)
 	defer address_cstr.Free()
 	var port_c C.int = 0
-	err := s.sessionError(C.ssh_channel_listen_forward(s.ptr, address_cstr.Ptr, C.int(port), &port_c))
+	err := s.apiError("ssh_channel_listen_forward",
+		C.ssh_channel_listen_forward(s.ptr, address_cstr.Ptr, C.int(port), &port_c))
 	return int(port_c), err
 }
 
@@ -96,7 +109,8 @@ func (s Session) ListenForward(address string, port int) (int, error) {
 // function using the same channel/session is running at same time (not 100%
 // threadsafe).
 func (c Channel) ChangePtySize(cols, row int) error {
-	return c.convertError(C.ssh_channel_change_pty_size(c.ptr, C.int(cols), C.int(row)))
+	return c.convertError("ssh_channel_change_pty_size",
+		C.ssh_channel_change_pty_size(c.ptr, C.int(cols), C.int(row)))
 }
 
 // Close a channel.
@@ -104,7 +118,8 @@ func (c Channel) ChangePtySize(cols, row int) error {
 // This sends an end of file and then closes the channel. You won't be able to
 // recover any data the server was going to send or was in buffers.
 func (c Channel) Close() error {
-	return c.convertError(C.ssh_channel_close(c.ptr))
+	return c.convertError("ssh_channel_close",
+		C.ssh_channel_close(c.ptr))
 }
 
 // Close and free a channel
@@ -155,7 +170,8 @@ func (c Channel) IsOpen() bool {
 // be opened if the client claimed support by sending a channel request
 // beforehand.
 func (c Channel) OpenAuthAgent() error {
-	return c.convertError(C.ssh_channel_open_auth_agent(c.ptr))
+	return c.convertError("ssh_channel_open_auth_agent",
+		C.ssh_channel_open_auth_agent(c.ptr))
 }
 
 // Open a TCP/IP forwarding channel.
@@ -180,7 +196,8 @@ func (c Channel) OpenForward(remoteHost string, remotePort int, sourceHost strin
 	defer remoteHost_s.Free()
 	sourceHost_s := CString(sourceHost)
 	defer sourceHost_s.Free()
-	return c.convertError(C.ssh_channel_open_forward(c.ptr, remoteHost_s.Ptr, C.int(remotePort), sourceHost_s.Ptr, C.int(localPort)))
+	return c.convertError("ssh_channel_open_forward",
+		C.ssh_channel_open_forward(c.ptr, remoteHost_s.Ptr, C.int(remotePort), sourceHost_s.Ptr, C.int(localPort)))
 }
 
 // Open a TCP/IP reverse forwarding channel.
@@ -189,17 +206,19 @@ func (c Channel) OpenForward(remoteHost string, remotePort int, sourceHost strin
 //  This function does not bind the local port and does not automatically
 //  forward the content of a socket to the channel. You still have to use
 //  channel_read and channel_write for this.
-/*func (c Channel) OpenReverseForward(remoteHost string, remotePort int, sourceHost string, localPort int) error {
+func (c Channel) OpenReverseForward(remoteHost string, remotePort int, sourceHost string, localPort int) error {
 	remoteHost_s := CString(remoteHost)
 	defer remoteHost_s.Free()
 	sourceHost_s := CString(sourceHost)
 	defer sourceHost_s.Free()
-	return c.convertError(C.ssh_channel_open_reverse_forward(c.ptr, remoteHost_s.Ptr, C.int(remotePort), sourceHost_s.Ptr, C.int(localPort)))
-}*/
+	return apiError("ssh_channel_open_reverse_forward",
+		C.ssh_channel_open_reverse_forward(c.ptr, remoteHost_s.Ptr, C.int(remotePort), sourceHost_s.Ptr, C.int(localPort)))
+}
 
 // Open a session channel (suited for a shell, not TCP forwarding).
 func (c Channel) OpenSession() error {
-	return c.convertError(C.ssh_channel_open_session(c.ptr))
+	return c.convertError("ssh_channel_open_session",
+		C.ssh_channel_open_session(c.ptr))
 }
 
 // Open a X11 channel.
@@ -211,7 +230,8 @@ func (c Channel) OpenSession() error {
 func (c Channel) OpenX11(originAddr string, originPort int) error {
 	originAddr_cstr := CString(originAddr)
 	defer originAddr_cstr.Free()
-	return c.convertError(C.ssh_channel_open_x11(c.ptr, originAddr_cstr.Ptr, C.int(originPort)))
+	return c.convertError("ssh_channel_open_x11",
+		C.ssh_channel_open_x11(c.ptr, originAddr_cstr.Ptr, C.int(originPort)))
 }
 
 // Polls a channel for data to read.
@@ -227,8 +247,8 @@ func (c Channel) OpenX11(originAddr string, originPort int) error {
 //  When the channel is in EOF state, the function returns SSH_EOF.
 func (c Channel) Poll(isStderr bool) (int, error) {
 	ret := C.ssh_channel_poll(c.ptr, CBool(isStderr))
-	if err := c.convertError(ret); err != nil {
-		return 0, err
+	if ret != SSH_OK {
+		return 0, c.convertError("ssh_channel_poll", ret)
 	}
 	return int(ret), nil
 }
@@ -243,7 +263,7 @@ func (c Channel) Poll(isStderr bool) (int, error) {
 //  A boolean to select the stderr stream.
 func (c Channel) PollTimeout(timeout int, isStderr bool) (int, error) {
 	ret := C.ssh_channel_poll_timeout(c.ptr, C.int(timeout), CBool(isStderr))
-	if err := c.convertError(ret); err != nil {
+	if err := c.convertError("ssh_channel_poll_timeout", ret); err != nil {
 		return 0, err
 	}
 	return int(ret), nil
@@ -263,7 +283,7 @@ func (c Channel) Read(count int, isStderr bool) ([]byte, error) {
 	if ret > 0 {
 		return buf, nil
 	}
-	return nil, c.convertError(ret)
+	return nil, c.convertError("ssh_channel_read", ret)
 }
 
 // Do a nonblocking read on the channel
@@ -275,7 +295,7 @@ func (c Channel) ReadNonblocking(count int, isStderr bool) ([]byte, error) {
 	if ret > 0 {
 		return buf, nil
 	}
-	return nil, c.convertError(ret)
+	return nil, c.convertError("ssh_channel_read_nonblocking", ret)
 }
 
 func (c Channel) ReadTimeout(timeout, count int, isStderr bool) ([]byte, error) {
@@ -284,7 +304,7 @@ func (c Channel) ReadTimeout(timeout, count int, isStderr bool) ([]byte, error) 
 	if ret > 0 {
 		return buf, nil
 	}
-	return nil, c.convertError(ret)
+	return nil, c.convertError("ssh_channel_read_timeout", ret)
 }
 
 // Send an "auth-agent-req" channel request over an existing session channel.
@@ -292,8 +312,8 @@ func (c Channel) ReadTimeout(timeout, count int, isStderr bool) ([]byte, error) 
 // This client-side request will enable forwarding the agent over an secure
 // tunnel. When the server is ready to open one authentication agent channel, an
 // ssh_channel_open_request_auth_agent_callback event will be generated.
-func (c Channel) SendAuthAgentRequest() error {
-	return c.convertError(C.ssh_channel_request_auth_agent(c.ptr))
+func (c Channel) RequestAuthAgent() error {
+	return c.convertError("ssh_channel_request_auth_agent", C.ssh_channel_request_auth_agent(c.ptr))
 }
 
 // Set environment variables
@@ -305,12 +325,13 @@ func (c Channel) SendAuthAgentRequest() error {
 //
 // Warning
 //  Some environment variables may be refused by security reasons.
-func (c Channel) SendEnvRequest(name, value string) error {
+func (c Channel) RequestEnv(name, value string) error {
 	name_cstr := CString(name)
 	defer name_cstr.Free()
 	value_cstr := CString(value)
 	defer value_cstr.Free()
-	return c.convertError(C.ssh_channel_request_env(c.ptr, name_cstr.Ptr, value_cstr.Ptr))
+	return c.convertError("ssh_channel_request_env",
+		C.ssh_channel_request_env(c.ptr, name_cstr.Ptr, value_cstr.Ptr))
 }
 
 // Run a shell command without an interactive shell.
@@ -319,58 +340,28 @@ func (c Channel) SendEnvRequest(name, value string) error {
 //  The command to execute (e.g. "ls ~/ -al | grep -i reports").
 //
 // This is similar to 'sh -c command'.
-func (c Channel) Exec(cmdline string) error {
+func (c Channel) RequestExec(cmdline string) error {
 	cmdline_cstr := CString(cmdline)
 	defer cmdline_cstr.Free()
-	return c.convertError(C.ssh_channel_request_exec(c.ptr, cmdline_cstr.Ptr))
+	return c.convertError("ssh_channel_request_exec",
+		C.ssh_channel_request_exec(c.ptr, cmdline_cstr.Ptr))
 }
 
 // Request a PTY.
-func (c Channel) SendPtyRequest() error {
-	return c.convertError(C.ssh_channel_request_pty(c.ptr))
+func (c Channel) RequestPty() error {
+	return c.convertError("ssh_channel_request_pty", C.ssh_channel_request_pty(c.ptr))
 }
 
 // Request a pty with a specific type and size
 //
 // terminal
 //  The terminal type ("vt100, xterm,...")
-func (c Channel) SendPtySize(termType string, cols, rows int) error {
+func (c Channel) RequestPtySize(termType string, cols, rows int) error {
 	termType_cstr := CString(termType)
 	defer termType_cstr.Free()
-	return c.convertError(C.ssh_channel_request_pty_size(c.ptr, termType_cstr.Ptr, C.int(cols), C.int(rows)))
+	return c.convertError("ssh_channel_request_pty_size",
+		C.ssh_channel_request_pty_size(c.ptr, termType_cstr.Ptr, C.int(cols), C.int(rows)))
 }
-
-// Send an exit signal to remote process (RFC 4254, section 6.10).
-//
-// This sends the exit status of the remote process. Note, that remote system
-// may not support signals concept. In such a case this request will be silently
-// ignored. Only SSH-v2 is supported (I'm not sure about SSH-v1).
-//
-// sig:
-//  The signal to send (without SIG prefix) (e.g. "TERM" or "KILL").
-// coreDump:
-//  A boolean to tell if a core was dumped
-// errmsg:
-//  A CRLF explanation text about the error condition
-// lang:
-//  The language used in the message (format: RFC 3066)
-/*func (c Channel) SendExitSignal(sig string, coreDump bool, errmsg, lang string) error {
-	sig_cstr := CString(sig)
-	defer sig_cstr.Free()
-	errmsg_cstr := CString(errmsg)
-	defer errmsg_cstr.Free()
-	lang_cstr := CString(lang)
-	defer lang_cstr.Free()
-	return c.convertError(C.ssh_channel_request_send_exit_signal(c.ptr, sig_cstr, CBool(coreDump), errmsg_cstr, lang_cstr))
-}*/
-
-// Send the exit status to the remote process
-//
-// Sends the exit status to the remote process (as described in RFC 4254,
-// section 6.10). Only SSH-v2 is supported (I'm not sure about SSH-v1).
-/*func (c Channel) SendExitStatus(status int) error {
-	return c.convertError(C.ssh_channel_request_send_exit_status(c.ptr, C.int(status)))
-}*/
 
 // Send a signal to remote process (as described in RFC 4254, section 6.9).
 //
@@ -397,23 +388,26 @@ func (c Channel) SendPtySize(termType string, cols, rows int) error {
 //      SIGTERM -> TERM
 //      SIGUSR1 -> USR1
 //      SIGUSR2 -> USR2
-func (c Channel) SendSignal(sig string) error {
+func (c Channel) RequestSendSignal(sig string) error {
 	sig_cstr := CString(sig)
 	defer sig_cstr.Free()
-	return c.convertError(C.ssh_channel_request_send_signal(c.ptr, sig_cstr.Ptr))
+	return c.convertError("ssh_channel_request_send_signal",
+		C.ssh_channel_request_send_signal(c.ptr, sig_cstr.Ptr))
 }
 
 // Request a shell.
-func (c Channel) SendShellRequest() error {
-	return c.convertError(C.ssh_channel_request_shell(c.ptr))
+func (c Channel) RequestShell() error {
+	return c.convertError("ssh_channel_request_shell",
+		C.ssh_channel_request_shell(c.ptr))
 }
 
 // Request a subsystem (for example "sftp").
 //
-func (c Channel) SendSubsystemRequest(subsys string) error {
+func (c Channel) RequestSubsystem(subsys string) error {
 	subsys_cstr := CString(subsys)
 	defer subsys_cstr.Free()
-	return c.convertError(C.ssh_channel_request_subsystem(c.ptr, subsys_cstr.Ptr))
+	return c.convertError("ssh_channel_request_subsystem",
+		C.ssh_channel_request_subsystem(c.ptr, subsys_cstr.Ptr))
 }
 
 // Sends the "x11-req" channel request over an existing session channel.
@@ -430,19 +424,21 @@ func (c Channel) SendSubsystemRequest(subsys string) error {
 //  A x11 authentication cookie. Pass NULL to generate a random cookie.
 // screenNumber:
 //  The screen number.
-func (c Channel) SendX11Request(singleConnection bool, protocol, cookie string, screenNumber int) error {
+func (c Channel) RequestX11(singleConnection bool, protocol, cookie string, screenNumber int) error {
 	protocol_cstr := CString(protocol)
 	defer protocol_cstr.Free()
 	cookie_cstr := CString(cookie)
 	defer cookie_cstr.Free()
-	return c.convertError(C.ssh_channel_request_x11(c.ptr, CBool(singleConnection), protocol_cstr.Ptr, cookie_cstr.Ptr, C.int(screenNumber)))
+	return c.convertError("ssh_channel_request_x11",
+		C.ssh_channel_request_x11(c.ptr, CBool(singleConnection), protocol_cstr.Ptr, cookie_cstr.Ptr, C.int(screenNumber)))
 }
 
 // Send an end of file on the channel.
 //
 // This doesn't close the channel. You may still read from it but not write.
 func (c Channel) SendEOF() error {
-	return c.convertError(C.ssh_channel_send_eof(c.ptr))
+	return c.convertError("ssh_channel_send_eof",
+		C.ssh_channel_send_eof(c.ptr))
 }
 
 // Put the channel into blocking or nonblocking mode.
@@ -465,28 +461,28 @@ func (c Channel) Write(data []byte) error {
 		return nil
 	}
 	data_ptr := unsafe.Pointer(&data[0])
-	return c.convertError(C.ssh_channel_write(c.ptr, data_ptr, C.uint32_t(len)))
+	return c.convertError("ssh_channel_write",
+		C.ssh_channel_write(c.ptr, data_ptr, C.uint32_t(len)))
 }
 
-// Blocking write on a channel stderr.
-/*func (c Channel) WriteStderr(data []byte) error {
-	len = len(data)
-	if len == 0 {
-		return nil
-	}
-	data_ptr := unsafe.Pointer(&data[0])
-	return c.convertError(C.ssh_channel_write_stderr(c.ptr, data_ptr, len))
-}*/
+func (c Channel) RequestSendExitStatus(status int) error {
+	return apiError("ssh_channel_request_send_exit_status",
+		C.ssh_channel_request_send_exit_status(c.ptr, C.int(status)))
+}
 
-func (c Channel) convertError(err C.int) error {
-	switch err {
-	case SSH_OK:
-		return nil
-	case SSH_AGAIN:
-		return &TryAgainError{}
-	case SSH_ERROR:
-		fallthrough
-	default:
-		return &UnknownError{}
-	}
+func (c Channel) RequestSendExistSignal(signal string, core bool, errmsg, lang string) error {
+	signal_s := CString(signal)
+	defer signal_s.Free()
+	errmsg_s := CString(errmsg)
+	defer errmsg_s.Free()
+	lang_s := CString(lang)
+	defer lang_s.Free()
+	return apiError("ssh_channel_request_send_exit_signal",
+		C.ssh_channel_request_send_exit_signal(c.ptr, signal_s.Ptr, CBool(core), errmsg_s.Ptr, lang_s.Ptr))
+}
+
+func (c Channel) WriteStderr(data []string) error {
+
+	return apiError("ssh_channel_write_stderr",
+		C.ssh_channel_write_stderr(c.ptr, unsafe.Pointer(&data[0]), C.uint32_t(len(data))))
 }
