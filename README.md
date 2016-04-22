@@ -19,6 +19,14 @@ brew install --HEAD https://raw.githubusercontent.com/karfield/ssh2go/master/lib
 go get github.com/karfield/ssh2go
 ```
 
+If you have installed `libssh` but not the latest version in Mac OS, you should
+reinstall it:
+
+```
+brew reinstall --HEAD https://raw.githubusercontent.com/karfield/ssh2go/master/libssh.rb
+brew link --force libssh
+```
+
 ## Build from scratch
 
 If you want to build the libssh from scratch, use the './install-libs.sh' to install the prequisitements.
@@ -33,3 +41,5 @@ git submodule update --init --recursive
 
 ./install-libs.sh
 ```
+
+
