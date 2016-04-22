@@ -42,4 +42,39 @@ git submodule update --init --recursive
 ./install-libs.sh
 ```
 
+# Examples
+
+## simple-sshd
+
+Custom a sshd, and run it locally, Try it:
+
+```
+go install github.com/karfield/ssh2go/examples/ssh2go-simple-sshd
+```
+
+see some options:
+
+| option | shortcuts | default | description |
+|---|---|---|---|
+| port | p |2222|Set the port to bind.
+| hostkey | k ||Set the hostkey file path.
+| dsakey | d ||Set the dsa key.
+| rsakey | r ||Set the rsa key.
+| verbose |V ||Get verbose output.
+
+run it:
+
+```
+ssh2go-simple-sshd --dsakey=/path/to/your/dsakey --rsakey=/path/to/your/rsakey --port 8888 -V
+```
+
+then open another terminal, run as a client:
+
+```
+ssh localhost -p 8888 -l test
+```
+
+Note:
+
+granteed user and password: test / test
 
