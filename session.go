@@ -396,7 +396,6 @@ func (s Session) ParseConfig(filename string) error {
 // SSH_OPTIONS_GSSAPI_SERVER_IDENTITY Set it to specify the GSSAPI server identity that libssh should expect when connecting to the server (const char *).
 // SSH_OPTIONS_GSSAPI_CLIENT_IDENTITY Set it to specify the GSSAPI client identity that libssh should expect when connecting to the server (const char *).
 // SSH_OPTIONS_GSSAPI_DELEGATE_CREDENTIALS Set it to specify that GSSAPI should delegate credentials to the server (int, 0 = false).
-
 func (s Session) SetOption(optionType int, value interface{}) error {
 	var v unsafe.Pointer
 	switch optionType {

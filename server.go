@@ -18,7 +18,10 @@ void bind_callbacks_init(ssh_bind_callbacks p) {
 typedef int(*ssh_bind_message_callback)(ssh_session session, ssh_message msg, void *data);
 */
 import "C"
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 const (
 	SSH_BIND_OPTIONS_BINDADDR          = C.SSH_BIND_OPTIONS_BINDADDR
@@ -64,8 +67,36 @@ func (b Bind) Free() {
 	C.ssh_bind_free(b.ptr)
 }
 
-func (b Bind) SetOption(optionType int, value unsafe.Pointer) error {
-	return apiError("ssh_bind_options_set", C.ssh_bind_options_set(b.ptr, C.enum_ssh_bind_options_e(optionType), value))
+func (b Bind) SetOption(optionType int, value interface{}) error {
+	var ptr unsafe.Pointer
+	switch optionType {
+	case SSH_BIND_OPTIONS_BINDADDR,
+		SSH_BIND_OPTIONS_BINDPORT,
+		SSH_BIND_OPTIONS_LOG_VERBOSITY:
+		val, ok := value.(int)
+		if ok {
+			ptr = unsafe.Pointer(&val)
+		}
+
+	case SSH_BIND_OPTIONS_BINDPORT_STR,
+		SSH_BIND_OPTIONS_HOSTKEY,
+		SSH_BIND_OPTIONS_DSAKEY,
+		SSH_BIND_OPTIONS_RSAKEY,
+		SSH_BIND_OPTIONS_BANNER,
+		SSH_BIND_OPTIONS_LOG_VERBOSITY_STR,
+		SSH_BIND_OPTIONS_ECDSAKEY:
+		val, ok := value.(string)
+		if ok {
+			v := CString(val)
+			defer v.Free()
+			ptr = unsafe.Pointer(v.Ptr)
+		}
+	}
+	if ptr == nil {
+		return fmt.Errorf("Illegal parameter type for ssh_bind_options_set()")
+	}
+	return apiError("ssh_bind_options_set",
+		C.ssh_bind_options_set(b.ptr, C.enum_ssh_bind_options_e(optionType), ptr))
 }
 
 func (b Bind) Listen() error {

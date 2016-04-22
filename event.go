@@ -80,3 +80,7 @@ func (e Event) RemoveFd(fd int) error {
 func (e Event) RemoveSession(session Session) error {
 	return apiError("ssh_event_remove_session", C.ssh_event_remove_session(e.event, session.ptr))
 }
+
+func (e Event) Poll(timeout int) error {
+	return apiError("ssh_event_dopoll", C.ssh_event_dopoll(e.event, C.int(timeout)))
+}
