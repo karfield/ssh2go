@@ -32,14 +32,15 @@ brew link --force libssh
 If you want to build the libssh from scratch, use the './install-libs.sh' to install the prequisitements.
 
 ```
-# download ssh2go, it will fails but okay.
-go get github.com/karfield/ssh2go
+go get -d github.com/karfield/ssh2go
 
 cd $GOPATH/src/github.com/karfield/ssh2go
 
 git submodule update --init --recursive
 
 ./install-libs.sh
+
+go install
 ```
 
 # Examples

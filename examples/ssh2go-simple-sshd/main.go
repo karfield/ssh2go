@@ -106,18 +106,23 @@ func main() {
 		fatal(err)
 		fatal(bind.Accept(session))
 		callbacks := &ServerCallbacks{}
-		session.SetServerCallbacks(callbacks)
+		if cbs, err := session.SetServerCallbacks(callbacks); err != nil {
+			fatal(err)
+		} else {
+			defer cbs.Free()
+		}
 		fatal(session.HandleKeyExchange())
 		session.SetAuthMethods(libssh.SSH_AUTH_METHOD_PASSWORD | libssh.SSH_AUTH_METHOD_GSSAPI_MIC)
 		mainLoop := libssh.NewEvent()
 		mainLoop.AddSession(session)
 		for {
-			if authenticated {
+			if authenticated && channel != nil {
 				break
 			}
 			if err := mainLoop.Poll(-1); err != nil {
 				fmt.Printf("session error: %s %d", session.GetErrorMsg(), session.GetErrorCode())
 				session.Disconnect()
+				return
 			}
 		}
 		for {

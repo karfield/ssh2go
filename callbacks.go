@@ -10,154 +10,230 @@ package libssh
 #include <libssh/libssh.h>
 #include <libssh/callbacks.h>
 
-void set_password_buffer_by_index( char *buf, int index,  char value) {
-	buf[index] = value;
-}
+extern void set_password_buffer_by_index(char *buf, int index,  char value);
+extern ssh_string get_oid_by_index(ssh_string *oids, int index);
+extern int pointer_to_int(void *userdata);
 
-void session_callbacks_init(ssh_callbacks p) {
-	ssh_callbacks_init(p);
-}
+typedef const char *conststr;
 
-void channel_callbacks_init(ssh_channel_callbacks p) {
-	ssh_callbacks_init(p);
-}
+extern void install_auth_callback(ssh_callbacks callbacks);
+extern void install_log_callback(ssh_callbacks callbacks);
+extern void install_connection_status_callback(ssh_callbacks callbacks);
+extern void install_global_request_callback(ssh_callbacks callbacks);
+extern void install_channel_open_request_x11_callback(ssh_callbacks callbacks);
+extern void install_channel_open_request_auth_agent_callback(ssh_callbacks callbacks);
+extern ssh_callbacks new_callbacks(int userdata);
+extern int set_callbacks(ssh_session session, ssh_callbacks callbacks);
+extern void install_channel_data_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_eof_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_close_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_signal_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_exit_status_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_exit_signal_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_pty_request_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_shell_request_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_auth_agent_req_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_x11_req_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_pty_window_change_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_exec_request_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_env_request_callback(ssh_channel_callbacks callbacks);
+extern void install_channel_subsystem_request_callback(ssh_channel_callbacks callbacks);
+extern ssh_channel_callbacks new_channel_callbacks(int userdata);
+extern int set_channel_callbacks(ssh_channel channel, ssh_channel_callbacks callbacks);
+extern void install_auth_password_callback(ssh_server_callbacks callbacks);
+extern void install_auth_none_callback(ssh_server_callbacks callbacks);
+extern void install_auth_gssapi_mic_callback(ssh_server_callbacks callbacks);
+extern void install_auth_pubkey_callback(ssh_server_callbacks callbacks);
+extern void install_service_request_callback(ssh_server_callbacks callbacks);
+extern void install_channel_open_request_session_callback(ssh_server_callbacks callbacks);
+extern void install_gssapi_select_oid_callback(ssh_server_callbacks callbacks);
+extern void install_gssapi_accept_sec_ctx_callback(ssh_server_callbacks callbacks);
+extern void install_gssapi_verify_mic_callback(ssh_server_callbacks callbacks);
+extern ssh_server_callbacks new_server_callbacks(int userdata);
+extern int set_server_callbacks(ssh_session session, ssh_server_callbacks callbacks);
 
-void server_callbacks_init(ssh_server_callbacks p) {
-	ssh_callbacks_init(p);
-}
-
-typedef void (*connect_status_function)(void *userdata, float status);
-
-ssh_string get_oid_by_index(ssh_string *oids, int index)  {
-	return oids[index];
-}
 */
 import "C"
 
 import (
-	"errors"
+	"reflect"
+	"runtime"
 	"unsafe"
 )
 
 var NULL = unsafe.Pointer(nil)
+var callbackCache = map[int]interface{}{}
+var callbackIndexer = 0
 
-func (s Session) SetCallbacks(impls interface{}) error {
-	cbs := C.struct_ssh_callbacks_struct{}
-	if cb, ok := impls.(SshAuthCallback); ok {
-		cbs.auth_function = wrapSshAuthCallback(cb)
-	}
-	if cb, ok := impls.(SessionLogCallback); ok {
-		cbs.log_function = wrapSessionLogCallback(cb)
-	}
-	if cb, ok := impls.(ConnectProgressCallback); ok {
-		cbs.connect_status_function = wrapConnectProgressCallback(cb)
-	}
-	if cb, ok := impls.(GlobalRequestCallback); ok {
-		cbs.global_request_function = wrapGlobalRequestCallback(cb)
-	}
-	if cb, ok := impls.(SessionConnectProgressCallback); ok {
-		cbs.connect_status_function = wrapSessionConnectProgressCallback(cb)
-	}
-	if cb, ok := impls.(OpenX11Callback); ok {
-		cbs.channel_open_request_x11_function = wrapOpenX11Callback(cb)
-	}
-	if cb, ok := impls.(OpenAuthAgentCallbak); ok {
-		cbs.channel_open_request_auth_agent_function = wrapOpenAuthAgentCallbak(cb)
-	}
-	C.session_callbacks_init(&cbs)
-	if C.ssh_set_callbacks(s.ptr, &cbs) == SSH_OK {
-		return nil
-	}
-	return errors.New("ssh_set_callbacks() != SSH_OK")
+func addCallback(intf interface{}) int {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	callbackCache[callbackIndexer] = intf
+	defer func() {
+		callbackIndexer++
+	}()
+	return callbackIndexer
 }
 
-func (c Channel) SetCallbacks(impls interface{}) error {
-	cbs := C.struct_ssh_channel_callbacks_struct{}
-	if cb, ok := impls.(ChannelRawDataCallback); ok {
-		cbs.channel_data_function = wrapChannelDataCallback(cb, nil)
-	} else if cb2, ok := impls.(ChannelDataCallback); ok {
-		cbs.channel_data_function = wrapChannelDataCallback(nil, cb2)
-	}
-	if cb, ok := impls.(ChannelEofCallback); ok {
-		cbs.channel_eof_function = wrapChannelEofCallback(cb)
-	}
-	if cb, ok := impls.(ChannelCloseCallback); ok {
-		cbs.channel_close_function = wrapChannelCloseCallback(cb)
-	}
-	if cb, ok := impls.(ChannelSignalCallback); ok {
-		cbs.channel_signal_function = wrapChannelSignalCallback(cb)
-	}
-	if cb, ok := impls.(ChannelExitStatusCallback); ok {
-		cbs.channel_exit_status_function = wrapChannelExitStatusCallback(cb)
-	}
-	if cb, ok := impls.(ChannelExitSignalCallback); ok {
-		cbs.channel_exit_signal_function = wrapChannelExitSignalCallback(cb)
-	}
-	if cb, ok := impls.(ChannelNewPtyRequestCallback); ok {
-		cbs.channel_pty_request_function = wrapChannelNewPtyRequestCallback(cb)
-	}
-	if cb, ok := impls.(ChanelShellRequestCallback); ok {
-		cbs.channel_shell_request_function = wrapChanelShellRequestCallback(cb)
-	}
-	if cb, ok := impls.(AuthAgentRequestCallback); ok {
-		cbs.channel_auth_agent_req_function = wrapAuthAgentRequestCallback(cb)
-	}
-	if cb, ok := impls.(ChannelX11RequestCallback); ok {
-		cbs.channel_x11_req_function = wrapChannelX11RequestCallback(cb)
-	}
-	if cb, ok := impls.(ChannelChangePtyWindowCallback); ok {
-		cbs.channel_pty_window_change_function = wrapChannelChangePtyWindowCallback(cb)
-	}
-	if cb, ok := impls.(ChannelExecRequestCallback); ok {
-		cbs.channel_exec_request_function = wrapChannelExecRequestCallback(cb)
-	}
-	if cb, ok := impls.(ChannelEnvRequestCallback); ok {
-		cbs.channel_env_request_function = wrapChannelEnvRequestCallback(cb)
-	}
-	if cb, ok := impls.(ChannelSubSystemRequestCallback); ok {
-		cbs.channel_subsystem_request_function = wrapChannelSubSystemRequestCallback(cb)
-	}
-	C.channel_callbacks_init(&cbs)
-	if C.ssh_set_channel_callbacks(c.ptr, &cbs) == SSH_OK {
-		return nil
-	}
-	return errors.New("ssh_set_channel_callbacks() != SSH_OK")
+func getCallback(userdata unsafe.Pointer) interface{} {
+	index := int(C.pointer_to_int(userdata))
+	return callbackCache[index]
 }
 
-func (s Session) SetServerCallbacks(impls interface{}) error {
-	cbs := C.struct_ssh_server_callbacks_struct{}
-	if cb, ok := impls.(AuthPasswordCallback); ok {
-		cbs.auth_password_function = wrapAutPasswordCallback(cb)
+func removeCallback(index int) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	delete(callbackCache, index)
+}
+
+type SessionCallbacks struct {
+	callbacks C.ssh_callbacks
+}
+
+func (s Session) SetCallbacks(impls interface{}) (SessionCallbacks, error) {
+	index := addCallback(impls)
+	callbacks := C.new_callbacks(C.int(index))
+	if _, ok := impls.(SshAuthCallback); ok {
+		C.install_auth_callback(callbacks)
 	}
-	if cb, ok := impls.(AuthNoneCallback); ok {
-		cbs.auth_none_function = wrapAuthNoneCallback(cb)
+	if _, ok := impls.(SessionLogCallback); ok {
+		C.install_log_callback(callbacks)
 	}
-	if cb, ok := impls.(AuthGssapiMicCallback); ok {
-		cbs.auth_gssapi_mic_function = wrapAuthGssapiMicCallback(cb)
+	if _, ok := impls.(ConnectProgressCallback); ok {
+		C.install_connection_status_callback(callbacks)
 	}
-	if cb, ok := impls.(AuthPublicKeyCallback); ok {
-		cbs.auth_pubkey_function = wrapAuthPublickKeyCallback(cb)
+	if _, ok := impls.(GlobalRequestCallback); ok {
+		C.install_global_request_callback(callbacks)
 	}
-	if cb, ok := impls.(SessionServiceRequest); ok {
-		cbs.service_request_function = wrapSessionServiceRequest(cb)
+	/*if _, ok := impls.(SessionConnectProgressCallback); ok {
+		C.install_connection_status_callback(callbacks)
+	}*/
+	if _, ok := impls.(OpenX11Callback); ok {
+		C.install_channel_open_request_x11_callback(callbacks)
 	}
-	if cb, ok := impls.(OpenChannelCallback); ok {
-		cbs.channel_open_request_session_function = wrapOpenChannelCallback(cb)
+	if _, ok := impls.(OpenAuthAgentCallbak); ok {
+		C.install_channel_open_request_auth_agent_callback(callbacks)
 	}
-	if cb, ok := impls.(GssapiSelectOidCallback); ok {
-		cbs.gssapi_select_oid_function = wrapGssapiSelectOidCallback(cb)
+	err := apiError("ssh_set_callbacks", C.set_callbacks(s.ptr, callbacks))
+	if err != nil {
+		removeCallback(index)
 	}
-	if cb, ok := impls.(GssapiAcceptSecurityContextCallback); ok {
-		cbs.gssapi_accept_sec_ctx_function = wrapGssapiAcceptSecurityContextCallback(cb)
+	return SessionCallbacks{callbacks}, err
+}
+
+func (cbs SessionCallbacks) Free() {
+	C.free(unsafe.Pointer(cbs.callbacks))
+}
+
+type ChannelCallbacks struct {
+	callbacks C.ssh_channel_callbacks
+}
+
+var channelCallbacks = []interface{}{}
+
+func (c Channel) SetCallbacks(impls interface{}) (ChannelCallbacks, error) {
+	index := addCallback(impls)
+	callbacks := C.new_channel_callbacks(C.int(index))
+	if _, ok := impls.(ChannelRawDataCallback); ok {
+		C.install_channel_data_callback(callbacks)
+	} else if _, ok = impls.(ChannelDataCallback); ok {
+		C.install_channel_data_callback(callbacks)
 	}
-	if cb, ok := impls.(GssapiVerifyMicCallback); ok {
-		cbs.gssapi_verify_mic_function = wrapGssapiVerifyMicCallback(cb)
+	if _, ok := impls.(ChannelEofCallback); ok {
+		C.install_channel_eof_callback(callbacks)
 	}
-	C.server_callbacks_init(&cbs)
-	if C.ssh_set_server_callbacks(s.ptr, &cbs) == SSH_OK {
-		return nil
+	if _, ok := impls.(ChannelCloseCallback); ok {
+		C.install_channel_close_callback(callbacks)
 	}
-	return errors.New("ssh_server_callbacks_struct() != SSH_OK")
+	if _, ok := impls.(ChannelSignalCallback); ok {
+		C.install_channel_signal_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelExitStatusCallback); ok {
+		C.install_channel_exit_status_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelExitSignalCallback); ok {
+		C.install_channel_exit_signal_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelNewPtyRequestCallback); ok {
+		C.install_channel_pty_request_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelShellRequestCallback); ok {
+		C.install_channel_shell_request_callback(callbacks)
+	}
+	if _, ok := impls.(AuthAgentRequestCallback); ok {
+		C.install_channel_auth_agent_req_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelX11RequestCallback); ok {
+		C.install_channel_x11_req_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelChangePtyWindowCallback); ok {
+		C.install_channel_pty_window_change_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelExecRequestCallback); ok {
+		C.install_channel_exec_request_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelEnvRequestCallback); ok {
+		C.install_channel_env_request_callback(callbacks)
+	}
+	if _, ok := impls.(ChannelSubSystemRequestCallback); ok {
+		C.install_channel_subsystem_request_callback(callbacks)
+	}
+	err := apiError("ssh_set_channel_callbacks", C.set_channel_callbacks(c.ptr, callbacks))
+	if err != nil {
+		removeCallback(index)
+	}
+	return ChannelCallbacks{callbacks}, err
+}
+
+func (cbs ChannelCallbacks) Free() {
+	C.free(unsafe.Pointer(cbs.callbacks))
+}
+
+type ServerCallbacks struct {
+	callbacks C.ssh_server_callbacks
+}
+
+var serverCallbacks = []interface{}{}
+
+func (s Session) SetServerCallbacks(impls interface{}) (ServerCallbacks, error) {
+	index := addCallback(impls)
+	callbacks := C.new_server_callbacks(C.int(index))
+	if _, ok := impls.(AuthPasswordCallback); ok {
+		C.install_auth_password_callback(callbacks)
+	}
+	if _, ok := impls.(AuthNoneCallback); ok {
+		C.install_auth_none_callback(callbacks)
+	}
+	if _, ok := impls.(AuthGssapiMicCallback); ok {
+		C.install_auth_gssapi_mic_callback(callbacks)
+	}
+	if _, ok := impls.(AuthPublicKeyCallback); ok {
+		C.install_auth_pubkey_callback(callbacks)
+	}
+	if _, ok := impls.(SessionServiceRequest); ok {
+		C.install_service_request_callback(callbacks)
+	}
+	if _, ok := impls.(OpenChannelCallback); ok {
+		C.install_channel_open_request_session_callback(callbacks)
+	}
+	if _, ok := impls.(GssapiSelectOidCallback); ok {
+		C.install_gssapi_select_oid_callback(callbacks)
+	}
+	if _, ok := impls.(GssapiAcceptSecurityContextCallback); ok {
+		C.install_gssapi_accept_sec_ctx_callback(callbacks)
+	}
+	if _, ok := impls.(GssapiVerifyMicCallback); ok {
+		C.install_gssapi_verify_mic_callback(callbacks)
+	}
+	err := apiError("ssh_set_server_callbacks", C.set_server_callbacks(s.ptr, callbacks))
+	if err != nil {
+		removeCallback(index)
+	}
+	return ServerCallbacks{callbacks}, err
+}
+
+func (cbs ServerCallbacks) Free() {
+	C.free(unsafe.Pointer(cbs.callbacks))
 }
 
 // callbacks referred from: libssh/libssh.h
@@ -176,29 +252,24 @@ type SshAuthCallback interface {
 	OnSshAuth(prompt string, maxlen int, echo, verify bool) (string, bool)
 }
 
-func wrapSshAuthCallback(callback SshAuthCallback) C.ssh_auth_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(prompt *C.char, buf *C.char, length C.size_t, echo C.int, verify C.int, userdata unsafe.Pointer) C.int {
-			password_str, ok := callback.OnSshAuth(C.GoString(prompt), int(length), echo != 0, verify != 0)
-			if !ok {
-				return -1
-			}
-			password := []byte(password_str)
-			i := 0
-			passwordLength := len(password)
-			if int(length)-1 < passwordLength {
-				passwordLength = int(length) - 1
-			}
-			for ; i < passwordLength; i++ {
-				C.set_password_buffer_by_index(buf, C.int(i), C.char(password[i]))
-			}
-			C.set_password_buffer_by_index(buf, C.int(i), C.char(0x0))
-			return 0
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export auth_callback
+func auth_callback(prompt C.conststr, buf *C.char, length C.size_t, echo C.int, verify C.int, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(SshAuthCallback)
+	password_str, ok := callback.OnSshAuth(C.GoString(prompt), int(length), echo != 0, verify != 0)
+	if !ok {
+		return -1
 	}
-	return C.ssh_auth_callback(ptr)
+	password := []byte(password_str)
+	i := 0
+	passwordLength := len(password)
+	if int(length)-1 < passwordLength {
+		passwordLength = int(length) - 1
+	}
+	for ; i < passwordLength; i++ {
+		C.set_password_buffer_by_index(buf, C.int(i), C.char(password[i]))
+	}
+	C.set_password_buffer_by_index(buf, C.int(i), C.char(0x0))
+	return 0
 }
 
 // callbacks referred from: libssh/callbacks.h
@@ -219,15 +290,61 @@ type AuthGssapiMicCallback interface {
 	OnSshAuthGssapiMic(session Session, user, principle string) int
 }
 
-func wrapAuthGssapiMicCallback(callback AuthGssapiMicCallback) C.ssh_auth_gssapi_mic_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, user, principle *C.char, userdata unsafe.Pointer) C.int {
-			return C.int(callback.OnSshAuthGssapiMic(Session{session}, C.GoString(user), C.GoString(principle)))
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export auth_gssapi_mic_callback
+func auth_gssapi_mic_callback(session C.ssh_session, user, principle C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(AuthGssapiMicCallback)
+	return C.int(callback.OnSshAuthGssapiMic(Session{session}, C.GoString(user), C.GoString(principle)))
+}
+
+// handle the beginning of a GSSAPI authentication, server side.
+type GssapiSelectOidCallback interface {
+	OnSessionGssapiSelectOid(session Session, user string, oids []string) string
+}
+
+//export gssapi_select_oid_callback
+func gssapi_select_oid_callback(session C.ssh_session, user C.conststr, n_oids C.int, oids *C.ssh_string, userdata unsafe.Pointer) C.ssh_string {
+	callback, _ := getCallback(userdata).(GssapiSelectOidCallback)
+	oidSlice := make([]string, int(n_oids))
+	for i := 0; i < int(n_oids); i++ {
+		oid := C.get_oid_by_index(oids, C.int(i))
+		oidSlice[i] = SshString{oid}.String()
 	}
-	return C.ssh_auth_gssapi_mic_callback(ptr)
+	selected := callback.OnSessionGssapiSelectOid(Session{session}, C.GoString(user), oidSlice)
+	return NewStringFrom(selected).ptr
+}
+
+// handle the negociation of a security context, server side.
+type GssapiAcceptSecurityContextCallback interface {
+	// input_token input token provided by client
+	// return output of the gssapi accept_sec_context method, NULL after
+	// completion.
+	OnGssapiAcceptSecurityContext(session Session, inputToken string) (string, bool)
+}
+
+//export gssapi_accept_sec_ctx_callback
+func gssapi_accept_sec_ctx_callback(session C.ssh_session, input_token C.ssh_string, output_token *C.ssh_string, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(GssapiAcceptSecurityContextCallback)
+	outputToken, accepted := callback.OnGssapiAcceptSecurityContext(Session{session}, SshString{input_token}.String())
+	if accepted {
+		if err := NewStringFrom(outputToken).Copy(SshString{*output_token}); err == nil {
+			return SSH_OK
+		}
+	}
+	return SSH_ERROR
+}
+
+type GssapiVerifyMicCallback interface {
+	OnGssapiVerifyMic(session Session, mic string, data []byte) error
+}
+
+//export gssapi_verify_mic_callback
+func gssapi_verify_mic_callback(session C.ssh_session, mic C.ssh_string, data_ptr unsafe.Pointer, size C.size_t, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(GssapiVerifyMicCallback)
+	data := copyData(data_ptr, size)
+	if callback.OnGssapiVerifyMic(Session{session}, SshString{mic}.String(), data) != nil {
+		return SSH_ERROR
+	}
+	return SSH_OK
 }
 
 // Tries to authenticates user with the "none" method which is anonymous or
@@ -236,15 +353,10 @@ type AuthNoneCallback interface {
 	OnAuthNone(session Session, user string) int
 }
 
-func wrapAuthNoneCallback(callback AuthNoneCallback) C.ssh_auth_none_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, user *C.char, userdata unsafe.Pointer) C.int {
-			return C.int(callback.OnAuthNone(Session{session}, C.GoString(user)))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_auth_none_callback(ptr)
+//export auth_none_callback
+func auth_none_callback(session C.ssh_session, user C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(AuthNoneCallback)
+	return C.int(callback.OnAuthNone(Session{session}, C.GoString(user)))
 }
 
 // Tries to authenticates user with password
@@ -252,15 +364,12 @@ type AuthPasswordCallback interface {
 	OnAuthPassword(session Session, user, password string) int
 }
 
-func wrapAutPasswordCallback(callback AuthPasswordCallback) C.ssh_auth_password_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, user *C.char, password *C.char, userdata unsafe.Pointer) C.int {
-			return C.int(callback.OnAuthPassword(Session{session}, C.GoString(user), C.GoString(password)))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_auth_password_callback(ptr)
+var authPasswordCallbackType = reflect.TypeOf(AuthPasswordCallback(nil))
+
+//export auth_password_callback
+func auth_password_callback(session C.ssh_session, user, password C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(AuthPasswordCallback)
+	return C.int(callback.OnAuthPassword(Session{session}, C.GoString(user), C.GoString(password)))
 }
 
 // Tries to authenticates user with public key
@@ -273,16 +382,11 @@ type AuthPublicKeyCallback interface {
 	OnAuthPublickKey(session Session, user string, pubkey Key, signatureState int) int
 }
 
-func wrapAuthPublickKeyCallback(callback AuthPublicKeyCallback) C.ssh_auth_pubkey_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, user *C.char, pubkey *C.struct_ssh_key_struct, signature_state C.char, userdata unsafe.Pointer) C.int {
-			return C.int(callback.OnAuthPublickKey(Session{session}, C.GoString(user), Key{pubkey}, int(signature_state)))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_auth_pubkey_callback(ptr)
-
+//export auth_pubkey_callback
+func auth_pubkey_callback(session C.ssh_session, user C.conststr, pubkey *C.struct_ssh_key_struct,
+	signature_state C.char, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(AuthPublicKeyCallback)
+	return C.int(callback.OnAuthPublickKey(Session{session}, C.GoString(user), Key{pubkey}, int(signature_state)))
 }
 
 // SSH auth-agent-request from the client.
@@ -293,15 +397,10 @@ type AuthAgentRequestCallback interface {
 	OnChannelAuthAgentRequest(session Session, channel Channel)
 }
 
-func wrapAuthAgentRequestCallback(callback AuthAgentRequestCallback) C.ssh_channel_auth_agent_req_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
-			callback.OnChannelAuthAgentRequest(Session{session}, Channel{channel})
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_auth_agent_req_callback(ptr)
+//export channel_auth_agent_req_callback
+func channel_auth_agent_req_callback(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(AuthAgentRequestCallback)
+	callback.OnChannelAuthAgentRequest(Session{session}, Channel{channel})
 }
 
 // SSH channel close callback.
@@ -311,15 +410,10 @@ type ChannelCloseCallback interface {
 	OnChannelClose(session Session, channel Channel)
 }
 
-func wrapChannelCloseCallback(callback ChannelCloseCallback) C.ssh_channel_close_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
-			callback.OnChannelClose(Session{session}, Channel{channel})
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_close_callback(ptr)
+//export channel_close_callback
+func channel_close_callback(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelCloseCallback)
+	callback.OnChannelClose(Session{session}, Channel{channel})
 }
 
 // SSH channel data callback.
@@ -333,20 +427,16 @@ type ChannelRawDataCallback interface {
 	OnChannelRawData(session Session, channel Channel, data_ptr unsafe.Pointer, length uint, isStderr bool) int
 }
 
-func wrapChannelDataCallback(processRawData ChannelRawDataCallback, processData ChannelDataCallback) C.ssh_channel_data_callback {
-	ptr := NULL
-	if processRawData != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, data_ptr unsafe.Pointer, len C.uint32_t, is_stderr C.int, userdata unsafe.Pointer) C.int {
-			return C.int(processRawData.OnChannelRawData(Session{session}, Channel{channel}, data_ptr, uint(len), is_stderr != 0))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	} else if processData != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, data_ptr unsafe.Pointer, len C.uint32_t, is_stderr C.int, userdata unsafe.Pointer) C.int {
-			return C.int(processData.OnChannelData(Session{session}, Channel{channel}, copyData(data_ptr, len), is_stderr != 0))
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_data_callback
+func channel_data_callback(session C.ssh_session, channel C.ssh_channel,
+	data_ptr unsafe.Pointer, len C.uint32_t, is_stderr C.int, userdata unsafe.Pointer) C.int {
+	ptr := getCallback(userdata)
+	if rawProcess, ok := ptr.(ChannelRawDataCallback); ok {
+		return C.int(rawProcess.OnChannelRawData(Session{session}, Channel{channel}, data_ptr, uint(len), is_stderr != 0))
+	} else if process, ok := ptr.(ChannelDataCallback); ok {
+		return C.int(process.OnChannelData(Session{session}, Channel{channel}, copyData(data_ptr, len), is_stderr != 0))
 	}
-	return C.ssh_channel_data_callback(ptr)
+	return SSH_ERROR
 }
 
 // SSH channel environment request from a client.
@@ -355,21 +445,17 @@ type ChannelEnvRequestCallback interface {
 	OnChannelEnvRequest(session Session, channel Channel, envName, envValue string) bool
 }
 
-func wrapChannelEnvRequestCallback(callback ChannelEnvRequestCallback) C.ssh_channel_env_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, env_name, env_value *C.char, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelEnvRequest(Session{session}, Channel{channel}, C.GoString(env_name), C.GoString(env_value)) {
-				// 0 if the env request is accepted
-				return 0
-			} else {
-				// 1 if the request is denied
-				return 1
-			}
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_env_request_callback
+func channel_env_request_callback(session C.ssh_session, channel C.ssh_channel,
+	env_name, env_value C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelEnvRequestCallback)
+	if callback.OnChannelEnvRequest(Session{session}, Channel{channel}, C.GoString(env_name), C.GoString(env_value)) {
+		// 0 if the env request is accepted
+		return 0
+	} else {
+		// 1 if the request is denied
+		return 1
 	}
-	return C.ssh_channel_env_request_callback(ptr)
 }
 
 // SSH channel eof callback.
@@ -379,15 +465,10 @@ type ChannelEofCallback interface {
 	OnChannelEOF(session Session, channel Channel)
 }
 
-func wrapChannelEofCallback(callback ChannelEofCallback) C.ssh_channel_eof_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
-			callback.OnChannelEOF(Session{session}, Channel{channel})
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_eof_callback(ptr)
+//export channel_eof_callback
+func channel_eof_callback(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelEofCallback)
+	callback.OnChannelEOF(Session{session}, Channel{channel})
 }
 
 // SSH channel Exec request from a client.
@@ -396,19 +477,15 @@ type ChannelExecRequestCallback interface {
 	OnChannelExecRequest(session Session, channel Channel, cmdline string) bool
 }
 
-func wrapChannelExecRequestCallback(callback ChannelExecRequestCallback) C.ssh_channel_exec_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, cmdline *C.char, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelExecRequest(Session{session}, Channel{channel}, C.GoString(cmdline)) {
-				return 0
-			} else {
-				return 1
-			}
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_exec_request_callback
+func channel_exec_request_callback(session C.ssh_session, channel C.ssh_channel,
+	cmdline C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelExecRequestCallback)
+	if callback.OnChannelExecRequest(Session{session}, Channel{channel}, C.GoString(cmdline)) {
+		return 0
+	} else {
+		return 1
 	}
-	return C.ssh_channel_exec_request_callback(ptr)
 }
 
 // SSH channel exit signal callback.
@@ -422,15 +499,11 @@ type ChannelExitSignalCallback interface {
 	OnChannelExitSignal(session Session, channel Channel, signal string, core bool, errmsg, lang string)
 }
 
-func wrapChannelExitSignalCallback(callback ChannelExitSignalCallback) C.ssh_channel_exit_signal_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, signal *C.char, core C.int, errmsg, lang *C.char, userdata unsafe.Pointer) {
-			callback.OnChannelExitSignal(Session{session}, Channel{channel}, C.GoString(signal), core != 0, C.GoString(errmsg), C.GoString(lang))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_exit_signal_callback(ptr)
+//export channel_exit_signal_callback
+func channel_exit_signal_callback(session C.ssh_session, channel C.ssh_channel,
+	signal C.conststr, core C.int, errmsg, lang C.conststr, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelExitSignalCallback)
+	callback.OnChannelExitSignal(Session{session}, Channel{channel}, C.GoString(signal), core != 0, C.GoString(errmsg), C.GoString(lang))
 }
 
 // SSH channel exit status callback.
@@ -440,15 +513,10 @@ type ChannelExitStatusCallback interface {
 	OnChannelExitStatus(session Session, channel Channel, status int)
 }
 
-func wrapChannelExitStatusCallback(callback ChannelExitStatusCallback) C.ssh_channel_exit_status_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, status C.int, userdata unsafe.Pointer) {
-			callback.OnChannelExitStatus(Session{session}, Channel{channel}, int(status))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_exit_status_callback(ptr)
+//export channel_exit_status_callback
+func channel_exit_status_callback(session C.ssh_session, channel C.ssh_channel, status C.int, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelExitStatusCallback)
+	callback.OnChannelExitStatus(Session{session}, Channel{channel}, int(status))
 }
 
 // Handles an SSH new channel open "auth-agent" request.
@@ -463,15 +531,10 @@ type OpenAuthAgentCallbak interface {
 	OnOpenAuthAgent(session Session) Channel
 }
 
-func wrapOpenAuthAgentCallbak(callback OpenAuthAgentCallbak) C.ssh_channel_open_request_auth_agent_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, userdata unsafe.Pointer) C.ssh_channel {
-			return callback.OnOpenAuthAgent(Session{session}).ptr
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_open_request_auth_agent_callback(ptr)
+//export channel_open_request_auth_agent_callback
+func channel_open_request_auth_agent_callback(session C.ssh_session, userdata unsafe.Pointer) C.ssh_channel {
+	callback, _ := getCallback(userdata).(OpenAuthAgentCallbak)
+	return callback.OnOpenAuthAgent(Session{session}).ptr
 }
 
 // Handles an SSH new channel open session request.
@@ -483,15 +546,10 @@ type OpenChannelCallback interface {
 	OnOpenChannel(session Session) Channel
 }
 
-func wrapOpenChannelCallback(callback OpenChannelCallback) C.ssh_channel_open_request_session_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, userdata unsafe.Pointer) C.ssh_channel {
-			return callback.OnOpenChannel(Session{session}).ptr
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_open_request_session_callback(ptr)
+//export channel_open_request_session_callback
+func channel_open_request_session_callback(session C.ssh_session, userdata unsafe.Pointer) C.ssh_channel {
+	callback, _ := getCallback(userdata).(OpenChannelCallback)
+	return callback.OnOpenChannel(Session{session}).ptr
 }
 
 // Handles an SSH new channel open X11 request.
@@ -506,15 +564,10 @@ type OpenX11Callback interface {
 	OnOpenX11(session Session, originatorAddress string, originatorPort int) Channel
 }
 
-func wrapOpenX11Callback(callback OpenX11Callback) C.ssh_channel_open_request_x11_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, originator_address *C.char, originator_port C.int, userdata unsafe.Pointer) C.ssh_channel {
-			return callback.OnOpenX11(Session{session}, C.GoString(originator_address), int(originator_port)).ptr
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_open_request_x11_callback(ptr)
+//export channel_open_request_x11_callback
+func channel_open_request_x11_callback(session C.ssh_session, originator_address C.conststr, originator_port C.int, userdata unsafe.Pointer) C.ssh_channel {
+	callback, _ := getCallback(userdata).(OpenX11Callback)
+	return callback.OnOpenX11(Session{session}, C.GoString(originator_address), int(originator_port)).ptr
 }
 
 // SSH channel PTY request from a client.
@@ -529,18 +582,14 @@ type ChannelNewPtyRequestCallback interface {
 	OnChannelNewPty(session Session, channel Channel, term string, width, height, pxwidth, pwheight int) bool
 }
 
-func wrapChannelNewPtyRequestCallback(callback ChannelNewPtyRequestCallback) C.ssh_channel_pty_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, term *C.char, width, height, pxwidth, pwheight C.int, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelNewPty(Session{session}, Channel{channel}, C.GoString(term), int(width), int(height), int(pxwidth), int(pwheight)) {
-				return 0
-			}
-			return 1
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_pty_request_callback
+func channel_pty_request_callback(session C.ssh_session, channel C.ssh_channel,
+	term C.conststr, width, height, pxwidth, pwheight C.int, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelNewPtyRequestCallback)
+	if callback.OnChannelNewPty(Session{session}, Channel{channel}, C.GoString(term), int(width), int(height), int(pxwidth), int(pwheight)) {
+		return 0
 	}
-	return C.ssh_channel_pty_request_callback(ptr)
+	return 1
 }
 
 // SSH channel PTY windows change (terminal size) from a client.
@@ -554,38 +603,28 @@ type ChannelChangePtyWindowCallback interface {
 	OnChannelChangePtyWindow(session Session, channel Channel, width, height, pxwidth, pwheight int) bool
 }
 
-func wrapChannelChangePtyWindowCallback(callback ChannelChangePtyWindowCallback) C.ssh_channel_pty_window_change_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, width, height, pxwidth, pwheight C.int, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelChangePtyWindow(Session{session}, Channel{channel}, int(width), int(height), int(pxwidth), int(pwheight)) {
-				return 0
-			}
-			return 1
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_pty_window_change_callback
+func channel_pty_window_change_callback(session C.ssh_session, channel C.ssh_channel, width, height, pxwidth, pwheight C.int, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelChangePtyWindowCallback)
+	if callback.OnChannelChangePtyWindow(Session{session}, Channel{channel}, int(width), int(height), int(pxwidth), int(pwheight)) {
+		return 0
 	}
-	return C.ssh_channel_pty_window_change_callback(ptr)
+	return 1
 }
 
 // SSH channel Shell request from a client.
-type ChanelShellRequestCallback interface {
+type ChannelShellRequestCallback interface {
 	// return true if accepted
 	OnChannelShellRequest(session Session, channel Channel) bool
 }
 
-func wrapChanelShellRequestCallback(callback ChanelShellRequestCallback) C.ssh_channel_shell_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelShellRequest(Session{session}, Channel{channel}) {
-				return 0
-			}
-			return 1
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_shell_request_callback
+func channel_shell_request_callback(session C.ssh_session, channel C.ssh_channel, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelShellRequestCallback)
+	if callback.OnChannelShellRequest(Session{session}, Channel{channel}) {
+		return 0
 	}
-	return C.ssh_channel_shell_request_callback(ptr)
+	return 1
 }
 
 // SSH channel signal callback.
@@ -596,15 +635,10 @@ type ChannelSignalCallback interface {
 	OnChannelSignal(session Session, channel Channel, signal string)
 }
 
-func wrapChannelSignalCallback(callback ChannelSignalCallback) C.ssh_channel_signal_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, signal *C.char, userdata unsafe.Pointer) {
-			callback.OnChannelSignal(Session{session}, Channel{channel}, C.GoString(signal))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_signal_callback(ptr)
+//export channel_signal_callback
+func channel_signal_callback(session C.ssh_session, channel C.ssh_channel, signal C.conststr, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelSignalCallback)
+	callback.OnChannelSignal(Session{session}, Channel{channel}, C.GoString(signal))
 }
 
 // SSH channel subsystem request from a client.
@@ -613,18 +647,14 @@ type ChannelSubSystemRequestCallback interface {
 	OnChannelSubSystemRequest(session Session, channel Channel, subsystem string) bool
 }
 
-func wrapChannelSubSystemRequestCallback(callback ChannelSubSystemRequestCallback) C.ssh_channel_subsystem_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, subsystem *C.char, userdata unsafe.Pointer) C.int {
-			if callback.OnChannelSubSystemRequest(Session{session}, Channel{channel}, C.GoString(subsystem)) {
-				return 0
-			}
-			return 1
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export channel_subsystem_request_callback
+func channel_subsystem_request_callback(session C.ssh_session, channel C.ssh_channel,
+	subsystem C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(ChannelSubSystemRequestCallback)
+	if callback.OnChannelSubSystemRequest(Session{session}, Channel{channel}, C.GoString(subsystem)) {
+		return 0
 	}
-	return C.ssh_channel_subsystem_request_callback(ptr)
+	return 1
 }
 
 // SSH X11 request from the client.
@@ -635,15 +665,12 @@ type ChannelX11RequestCallback interface {
 	OnChannelX11Request(session Session, channel Channel, singleConnection bool, authProtocol, authCookie string, screenNumber int)
 }
 
-func wrapChannelX11RequestCallback(callback ChannelX11RequestCallback) C.ssh_channel_x11_req_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, channel C.ssh_channel, single_connection C.int, auth_protocol, auth_cookie *C.char, screen_number C.uint32_t, userdata unsafe.Pointer) {
-			callback.OnChannelX11Request(Session{session}, Channel{channel}, single_connection != 0, C.GoString(auth_protocol), C.GoString(auth_cookie), int(screen_number))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_channel_x11_req_callback(ptr)
+//export channel_x11_req_callback
+func channel_x11_req_callback(session C.ssh_session, channel C.ssh_channel,
+	single_connection C.int, auth_protocol, auth_cookie C.conststr,
+	screen_number C.uint32_t, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(ChannelX11RequestCallback)
+	callback.OnChannelX11Request(Session{session}, Channel{channel}, single_connection != 0, C.GoString(auth_protocol), C.GoString(auth_cookie), int(screen_number))
 }
 
 // SSH global request callback.
@@ -653,15 +680,10 @@ type GlobalRequestCallback interface {
 	OnGlobalRequest(session Session, message Message)
 }
 
-func wrapGlobalRequestCallback(callback GlobalRequestCallback) C.ssh_global_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, message C.ssh_message, userdata unsafe.Pointer) {
-			callback.OnGlobalRequest(Session{session}, Message{message})
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_global_request_callback(ptr)
+//export global_request_callback
+func global_request_callback(session C.ssh_session, message C.ssh_message, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(GlobalRequestCallback)
+	callback.OnGlobalRequest(Session{session}, Message{message})
 }
 
 // SSH log callback.
@@ -671,15 +693,10 @@ type SessionLogCallback interface {
 	OnSessionLog(session Session, priority int, message string)
 }
 
-func wrapSessionLogCallback(callback SessionLogCallback) C.ssh_log_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, priority C.int, message *C.char, userdata unsafe.Pointer) {
-			callback.OnSessionLog(Session{session}, int(priority), C.GoString(message))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_log_callback(ptr)
+//export log_callback
+func log_callback(session C.ssh_session, priority C.int, message C.conststr, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(SessionLogCallback)
+	callback.OnSessionLog(Session{session}, int(priority), C.GoString(message))
 }
 
 // All logging messages will go through this callback.
@@ -687,15 +704,10 @@ type SshLogCallback interface {
 	OnSshLog(priority int, message string)
 }
 
-func wrapSshLogCallback(callback SshLogCallback) C.ssh_logging_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(priority C.int, message *C.char, userdata unsafe.Pointer) {
-			callback.OnSshLog(int(priority), C.GoString(message))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_logging_callback(ptr)
+//export logging_callback
+func logging_callback(priority C.int, message *C.char, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(SshLogCallback)
+	callback.OnSshLog(int(priority), C.GoString(message))
 }
 
 // Prototype for a packet callback, to be called when a new packet arrives
@@ -705,18 +717,13 @@ type SessionPacketCallback interface {
 	OnSessionPacket(session Session, packetType int, buffer Buffer) bool
 }
 
-func wrapSessionPacketCallback(callback SessionPacketCallback) C.ssh_packet_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, packetType C.uint8_t, packet C.ssh_buffer, userdata unsafe.Pointer) C.int {
-			if callback.OnSessionPacket(Session{session}, int(packetType), Buffer{packet}) {
-				return C.SSH_PACKET_USED
-			}
-			return C.SSH_PACKET_NOT_USED
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export packet_callback
+func packet_callback(session C.ssh_session, packetType C.uint8_t, packet C.ssh_buffer, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(SessionPacketCallback)
+	if callback.OnSessionPacket(Session{session}, int(packetType), Buffer{packet}) {
+		return C.SSH_PACKET_USED
 	}
-	return C.ssh_packet_callback(ptr)
+	return C.SSH_PACKET_NOT_USED
 }
 
 // Handles an SSH service request.
@@ -725,18 +732,13 @@ type SessionServiceRequest interface {
 	OnSessionServiceRequest(session Session, service string) bool
 }
 
-func wrapSessionServiceRequest(callback SessionServiceRequest) C.ssh_service_request_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, service *C.char, userdata unsafe.Pointer) C.int {
-			if callback.OnSessionServiceRequest(Session{session}, C.GoString(service)) {
-				return 0
-			}
-			return -1
-		}
-		ptr = unsafe.Pointer(&wrapper)
+//export service_request_callback
+func service_request_callback(session C.ssh_session, service C.conststr, userdata unsafe.Pointer) C.int {
+	callback, _ := getCallback(userdata).(SessionServiceRequest)
+	if callback.OnSessionServiceRequest(Session{session}, C.GoString(service)) {
+		return 0
 	}
-	return C.ssh_service_request_callback(ptr)
+	return -1
 }
 
 // SSH Connection status callback.
@@ -746,15 +748,10 @@ type SessionConnectProgressCallback interface {
 	OnSessionConnectProgress(session Session, percentage float32)
 }
 
-func wrapSessionConnectProgressCallback(callback SessionConnectProgressCallback) C.ssh_status_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, status C.float, userdata unsafe.Pointer) {
-			callback.OnSessionConnectProgress(Session{session}, float32(status))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_status_callback(ptr)
+//export status_callback
+func status_callback(session C.ssh_session, status C.float, userdata unsafe.Pointer) {
+	callback, _ := getCallback(userdata).(SessionConnectProgressCallback)
+	callback.OnSessionConnectProgress(Session{session}, float32(status))
 }
 
 // callbacks define in structs
@@ -763,82 +760,8 @@ type ConnectProgressCallback interface {
 	OnConnectProgress(percentage float32)
 }
 
-func wrapConnectProgressCallback(callback ConnectProgressCallback) C.connect_status_function {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(userdata unsafe.Pointer, status C.float) {
-			callback.OnConnectProgress(float32(status))
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.connect_status_function(ptr)
-}
-
-// following is undocumented!
-
-// handle the beginning of a GSSAPI authentication, server side.
-type GssapiSelectOidCallback interface {
-	OnSessionGssapiSelectOid(session Session, user string, oids []string) string
-}
-
-func wrapGssapiSelectOidCallback(callback GssapiSelectOidCallback) C.ssh_gssapi_select_oid_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, user *C.char, n_oids C.int, oids *C.ssh_string, userdata unsafe.Pointer) C.ssh_string {
-			oidSlice := make([]string, int(n_oids))
-			for i := 0; i < int(n_oids); i++ {
-				oid := C.get_oid_by_index(oids, C.int(i))
-				oidSlice[i] = SshString{oid}.String()
-			}
-			selected := callback.OnSessionGssapiSelectOid(Session{session}, C.GoString(user), oidSlice)
-			return NewStringFrom(selected).ptr
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_gssapi_select_oid_callback(ptr)
-}
-
-// handle the negociation of a security context, server side.
-type GssapiAcceptSecurityContextCallback interface {
-	// input_token input token provided by client
-	// return output of the gssapi accept_sec_context method, NULL after
-	// completion.
-	OnGssapiAcceptSecurityContext(session Session, inputToken string) (string, bool)
-}
-
-func wrapGssapiAcceptSecurityContextCallback(callback GssapiAcceptSecurityContextCallback) C.ssh_gssapi_accept_sec_ctx_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, input_token C.ssh_string, output_token *C.ssh_string, userdata unsafe.Pointer) C.int {
-			output, ok := callback.OnGssapiAcceptSecurityContext(Session{session}, SshString{input_token}.String())
-			if !ok {
-				return SSH_ERROR
-			}
-			if NewStringFrom(output).Copy(SshString{*output_token}) != nil {
-				return SSH_ERROR
-			}
-			return SSH_OK
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_gssapi_accept_sec_ctx_callback(ptr)
-}
-
-type GssapiVerifyMicCallback interface {
-	OnGssapiVerifyMic(session Session, mic string, data []byte) error
-}
-
-func wrapGssapiVerifyMicCallback(callback GssapiVerifyMicCallback) C.ssh_gssapi_verify_mic_callback {
-	ptr := NULL
-	if callback != nil {
-		wrapper := func(session C.ssh_session, mic C.ssh_string, data_ptr unsafe.Pointer, size C.size_t, userdata unsafe.Pointer) C.int {
-			data := copyData(data_ptr, size)
-			if callback.OnGssapiVerifyMic(Session{session}, SshString{mic}.String(), data) != nil {
-				return SSH_ERROR
-			}
-			return SSH_OK
-		}
-		ptr = unsafe.Pointer(&wrapper)
-	}
-	return C.ssh_gssapi_verify_mic_callback(ptr)
+//export connection_status_callback
+func connection_status_callback(userdata unsafe.Pointer, status C.float) {
+	callback, _ := getCallback(userdata).(ConnectProgressCallback)
+	callback.OnConnectProgress(float32(status))
 }
