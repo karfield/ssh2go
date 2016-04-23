@@ -693,21 +693,10 @@ type SessionLogCallback interface {
 	OnSessionLog(session Session, priority int, message string)
 }
 
-//export log_callback
-func log_callback(session C.ssh_session, priority C.int, message C.conststr, userdata unsafe.Pointer) {
+//export session_log_callback
+func session_log_callback(session C.ssh_session, priority C.int, message C.conststr, userdata unsafe.Pointer) {
 	callback, _ := getCallback(userdata).(SessionLogCallback)
 	callback.OnSessionLog(Session{session}, int(priority), C.GoString(message))
-}
-
-// All logging messages will go through this callback.
-type SshLogCallback interface {
-	OnSshLog(priority int, message string)
-}
-
-//export logging_callback
-func logging_callback(priority C.int, message *C.char, userdata unsafe.Pointer) {
-	callback, _ := getCallback(userdata).(SshLogCallback)
-	callback.OnSshLog(int(priority), C.GoString(message))
 }
 
 // Prototype for a packet callback, to be called when a new packet arrives

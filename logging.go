@@ -8,6 +8,10 @@ package libssh
 #include <inttypes.h>
 #include <sys/types.h>
 #include <libssh/libssh.h>
+#include <libssh/callbacks.h>
+
+typedef const char *conststr;
+extern int set_log_callback();
 */
 import "C"
 import "unsafe"
@@ -26,20 +30,14 @@ type LoggingCallback interface {
 
 var loggingCallback LoggingCallback = nil
 
-//export sshLoggingCallback
-func sshLoggingCallback(priority C.int, function, buffer *C.char, userdata unsafe.Pointer) {
+//export logging_callback
+func logging_callback(priority C.int, function, buffer C.conststr, userdata unsafe.Pointer) {
 	if loggingCallback != nil {
 		loggingCallback.OnLogging(int(priority), C.GoString(function), C.GoString(buffer))
 	}
 }
 
-/*
 func SetLoggingCallback(callback LoggingCallback) error {
 	loggingCallback = callback
-	if C.ssh_get_log_callback() == nil {
-		if C.ssh_set_log_callback(sshLoggingCallback) < 0 {
-			return errors.New("Unable to set logging callback")
-		}
-	}
-	return nil
-}*/
+	return apiError("ssh_set_log_callback", C.set_log_callback())
+}
