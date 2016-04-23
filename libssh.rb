@@ -18,6 +18,7 @@ class Libssh < Formula
 
   def install
     args = std_cmake_args
+    args << "-DWITH_DEBUG=ON"
     args << "-DWITH_STATIC_LIB=ON"
     args << "-DWITH_GSSAPI=ON"
     args << "-DWITH_SERVER=ON"

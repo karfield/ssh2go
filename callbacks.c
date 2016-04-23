@@ -33,6 +33,7 @@ void install_channel_open_request_auth_agent_callback(ssh_callbacks callbacks) {
 
 ssh_callbacks new_callbacks(int index) {
 	ssh_callbacks callbacks = (ssh_callbacks)(malloc(sizeof(struct ssh_callbacks_struct)));
+    memset(callbacks, 0, sizeof(struct ssh_callbacks_struct));
 	callbacks->userdata = (void *)index;
 	return callbacks;
 }
@@ -75,6 +76,7 @@ void install_channel_subsystem_request_callback(ssh_channel_callbacks callbacks)
 
 ssh_channel_callbacks new_channel_callbacks(int index) {
 	ssh_channel_callbacks callbacks = (ssh_channel_callbacks)(malloc(sizeof(struct ssh_channel_callbacks_struct)));
+    memset(callbacks, 0, sizeof(struct ssh_channel_callbacks_struct));
 	callbacks->userdata = (void *)index;
 	return callbacks;
 }
@@ -107,6 +109,7 @@ void install_gssapi_verify_mic_callback(ssh_server_callbacks callbacks) { callba
 
 ssh_server_callbacks new_server_callbacks(int index) {
 	ssh_server_callbacks callbacks = (ssh_server_callbacks)(malloc(sizeof(struct ssh_server_callbacks_struct)));
+    memset(callbacks, 0, sizeof(struct ssh_server_callbacks_struct));
 	callbacks->userdata = (void *)index;
 	return callbacks;
 }

@@ -47,6 +47,11 @@ func (s *ServerCallbacks) OnOpenChannel(session libssh.Session) libssh.Channel {
 	return ch
 }
 
+func (s *ServerCallbacks) OnSessionServiceRequest(session libssh.Session, service string) bool {
+	fmt.Printf("request servce: %s\n", service)
+	return true
+}
+
 func (c *ChannelCallbacks) OnChannelNewPty(session libssh.Session, channel libssh.Channel, term string, width, height, pxwidth, pwheight int) bool {
 	fmt.Printf("client want to open a terminal: %s, %dx%d, pixel: %dx%d\n", term, width, height, pxwidth, pwheight)
 	return true
