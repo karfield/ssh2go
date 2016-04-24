@@ -38,14 +38,14 @@ var serverCallbacks = libssh.ServerCallbacks{
 		}
 		return libssh.SSH_AUTH_DENIED
 	},
-	OnOpenChannel: func(session libssh.Session) libssh.Channel {
+	OnOpenChannel: func(session libssh.Session) (libssh.Channel, error) {
 		fmt.Printf("on open channel\n")
 		ch, _ := session.NewChannel()
 		if err := ch.SetCallbacks(&channelCallbacks); err != nil {
 			fatal(err)
 		}
 		channel = &ch
-		return ch
+		return ch, nil
 	},
 	OnSessionServiceRequest: func(session libssh.Session, service string) bool {
 		fmt.Printf("request servce: %s\n", service)
@@ -73,6 +73,7 @@ func fatal(err error) {
 func main() {
 	cmdline := cli.NewApp()
 	cmdline.Name = "ssh2go-sample-sshd"
+	cmdline.Usage = "Example SSHD for single connection"
 	cmdline.Flags = []cli.Flag{
 		cli.IntFlag{
 			Name:  "port,p",
@@ -97,6 +98,7 @@ func main() {
 		},
 	}
 	cmdline.Action = func(ctx *cli.Context) {
+		fatal(libssh.Init())
 		bind, err := libssh.NewBind()
 		fatal(err)
 		fatal(bind.SetOption(libssh.SSH_BIND_OPTIONS_DSAKEY, ctx.String("dsakey")))
@@ -117,7 +119,8 @@ func main() {
 		}
 		fatal(session.HandleKeyExchange())
 		session.SetAuthMethods(libssh.SSH_AUTH_METHOD_PASSWORD | libssh.SSH_AUTH_METHOD_GSSAPI_MIC)
-		mainLoop := libssh.NewEvent()
+		mainLoop, err := libssh.NewEvent()
+		fatal(err)
 		mainLoop.AddSession(session)
 		for {
 			if authenticated && channel != nil {

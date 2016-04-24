@@ -18,6 +18,10 @@ type Channel struct {
 	ptr C.ssh_channel
 }
 
+func (c Channel) IsCreated() bool {
+	return c.ptr != nil
+}
+
 func (c Channel) convertError(fn string, err C.int) error {
 	switch err {
 	case SSH_OK:

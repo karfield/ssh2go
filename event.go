@@ -18,12 +18,12 @@ type Event struct {
 	event C.ssh_event
 }
 
-func NewEvent() Event {
+func NewEvent() (Event, error) {
 	ev := C.ssh_event_new()
 	if ev != nil {
-		return Event{ev}
+		return Event{ev}, nil
 	}
-	return Event{}
+	return Event{}, apiError("ssh_event_new", "NULL")
 }
 
 func (e Event) Free() {

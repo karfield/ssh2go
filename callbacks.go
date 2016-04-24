@@ -294,7 +294,7 @@ type ServerCallbacks struct {
 	// Warning:
 	//  The channel pointer returned by this callback must be closed by the
 	//  application.
-	OnOpenChannel func(session Session) Channel
+	OnOpenChannel func(session Session) (Channel, error)
 	// handle the beginning of a GSSAPI authentication, server side.
 	OnSessionGssapiSelectOid func(session Session, user string, oids []string) string
 	// handle the negociation of a security context, server side.
@@ -520,7 +520,14 @@ func channel_open_request_auth_agent_callback(session C.ssh_session, userdata un
 //export channel_open_request_session_callback
 func channel_open_request_session_callback(session C.ssh_session, userdata unsafe.Pointer) C.ssh_channel {
 	callbacks := (*ServerCallbacks)(userdata)
-	return callbacks.OnOpenChannel(Session{session}).ptr
+	ch, err := callbacks.OnOpenChannel(Session{session})
+	if err != nil {
+		if ch.ptr != nil {
+			// WARNING!!!
+		}
+		return nil
+	}
+	return ch.ptr
 }
 
 //export channel_open_request_x11_callback
