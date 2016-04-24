@@ -77,6 +77,14 @@ then open another terminal, run as a client:
 ssh localhost -p 8888 -l test
 ```
 
+## multi-sshd
+
+like `simple-sshd`, to run as server:
+
+```
+ssh2go-multi-sshd --dsakey=/path/to/your/dsakey --rsakey=/path/to/your/rsakey --port 8888 -V
+```
+
 Note:
 
 granted user and password: test / test
