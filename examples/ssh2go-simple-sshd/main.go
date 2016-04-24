@@ -15,51 +15,53 @@ var authenticated = false
 var tryCount = 0
 var channel *libssh.Channel
 
-func (s *ServerCallbacks) OnAuthPassword(session libssh.Session, user, password string) int {
-	fmt.Printf("auth user: %s, password: %s\n", user, password)
-	if user == "test" && password == "test" {
-		authenticated = true
-		tryCount = 0
-		return libssh.SSH_AUTH_SUCCESS
-	}
-	if tryCount >= 3 {
-		session.Disconnect()
+var serverCallbacks = libssh.ServerCallbacks{
+	OnAuthPassword: func(session libssh.Session, user, password string) int {
+		fmt.Printf("auth user: %s, password: %s\n", user, password)
+		if user == "test" && password == "test" {
+			authenticated = true
+			tryCount = 0
+			return libssh.SSH_AUTH_SUCCESS
+		}
+		if tryCount >= 3 {
+			session.Disconnect()
+			return libssh.SSH_AUTH_DENIED
+		}
+		tryCount++
 		return libssh.SSH_AUTH_DENIED
-	}
-	tryCount++
-	return libssh.SSH_AUTH_DENIED
+	},
+	OnSshAuthGssapiMic: func(session libssh.Session, user, principle string) int {
+		fmt.Printf("auth GSSAPI with Mic, user: %s, principle %s\n", user, principle)
+		_, err := session.GssapiGetCreds()
+		if err == nil {
+			return libssh.SSH_AUTH_SUCCESS
+		}
+		return libssh.SSH_AUTH_DENIED
+	},
+	OnOpenChannel: func(session libssh.Session) libssh.Channel {
+		fmt.Printf("on open channel\n")
+		ch, _ := session.NewChannel()
+		if err := ch.SetCallbacks(&channelCallbacks); err != nil {
+			fatal(err)
+		}
+		channel = &ch
+		return ch
+	},
+	OnSessionServiceRequest: func(session libssh.Session, service string) bool {
+		fmt.Printf("request servce: %s\n", service)
+		return true
+	},
 }
 
-func (s *ServerCallbacks) OnSshAuthGssapiMic(session libssh.Session, user, principle string) int {
-	fmt.Printf("auth GSSAPI with Mic, user: %s, principle %s\n", user, principle)
-	_, err := session.GssapiGetCreds()
-	if err == nil {
-		return libssh.SSH_AUTH_SUCCESS
-	}
-	return libssh.SSH_AUTH_DENIED
-}
-
-func (s *ServerCallbacks) OnOpenChannel(session libssh.Session) libssh.Channel {
-	fmt.Printf("on open channel\n")
-	ch, _ := session.NewChannel()
-	ch.SetCallbacks(&ChannelCallbacks{})
-	channel = &ch
-	return ch
-}
-
-func (s *ServerCallbacks) OnSessionServiceRequest(session libssh.Session, service string) bool {
-	fmt.Printf("request servce: %s\n", service)
-	return true
-}
-
-func (c *ChannelCallbacks) OnChannelNewPty(session libssh.Session, channel libssh.Channel, term string, width, height, pxwidth, pwheight int) bool {
-	fmt.Printf("client want to open a terminal: %s, %dx%d, pixel: %dx%d\n", term, width, height, pxwidth, pwheight)
-	return true
-}
-
-func (c *ChannelCallbacks) OnChannelShellRequest(session libssh.Session, channel libssh.Channel) bool {
-	fmt.Printf("shell has opended")
-	return true
+var channelCallbacks = libssh.ChannelCallbacks{
+	OnChannelNewPty: func(session libssh.Session, channel libssh.Channel, term string, width, height, pxwidth, pwheight int) bool {
+		fmt.Printf("client want to open a terminal: %s, %dx%d, pixel: %dx%d\n", term, width, height, pxwidth, pwheight)
+		return true
+	},
+	OnChannelShellRequest: func(session libssh.Session, channel libssh.Channel) bool {
+		fmt.Printf("shell has opended")
+		return true
+	},
 }
 
 func fatal(err error) {
@@ -110,11 +112,8 @@ func main() {
 		session, err := libssh.NewSession()
 		fatal(err)
 		fatal(bind.Accept(session))
-		callbacks := &ServerCallbacks{}
-		if cbs, err := session.SetServerCallbacks(callbacks); err != nil {
+		if err := session.SetServerCallbacks(&serverCallbacks); err != nil {
 			fatal(err)
-		} else {
-			defer cbs.Free()
 		}
 		fatal(session.HandleKeyExchange())
 		session.SetAuthMethods(libssh.SSH_AUTH_METHOD_PASSWORD | libssh.SSH_AUTH_METHOD_GSSAPI_MIC)

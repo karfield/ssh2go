@@ -31,11 +31,10 @@ void install_global_request_callback(ssh_callbacks callbacks) { callbacks->globa
 void install_channel_open_request_x11_callback(ssh_callbacks callbacks) { callbacks->channel_open_request_x11_function = channel_open_request_x11_callback; }
 void install_channel_open_request_auth_agent_callback(ssh_callbacks callbacks) { callbacks->channel_open_request_auth_agent_function = channel_open_request_auth_agent_callback; }
 
-ssh_callbacks new_callbacks(int index) {
-	ssh_callbacks callbacks = (ssh_callbacks)(malloc(sizeof(struct ssh_callbacks_struct)));
-    memset(callbacks, 0, sizeof(struct ssh_callbacks_struct));
-	callbacks->userdata = (void *)((unsigned long)index);
-	return callbacks;
+ssh_callbacks new_session_callbacks() {
+	ssh_callbacks ptr = (ssh_callbacks)malloc(sizeof(struct ssh_callbacks_struct));
+	memset(ptr, 0, sizeof(*ptr));
+	return ptr;
 }
 
 int set_callbacks(ssh_session session, ssh_callbacks callbacks) {
@@ -74,11 +73,10 @@ void install_channel_exec_request_callback(ssh_channel_callbacks callbacks) { ca
 void install_channel_env_request_callback(ssh_channel_callbacks callbacks) { callbacks->channel_env_request_function = channel_env_request_callback; }
 void install_channel_subsystem_request_callback(ssh_channel_callbacks callbacks) { callbacks->channel_subsystem_request_function = channel_subsystem_request_callback; }
 
-ssh_channel_callbacks new_channel_callbacks(int index) {
-	ssh_channel_callbacks callbacks = (ssh_channel_callbacks)(malloc(sizeof(struct ssh_channel_callbacks_struct)));
-    memset(callbacks, 0, sizeof(struct ssh_channel_callbacks_struct));
-	callbacks->userdata = (void *)((unsigned long)index);
-	return callbacks;
+ssh_channel_callbacks new_channel_callbacks() {
+    ssh_channel_callbacks callbacks = (ssh_channel_callbacks) malloc(sizeof(struct ssh_channel_callbacks_struct));
+    memset(callbacks, 0, sizeof(*callbacks));
+    return callbacks;
 }
 
 int set_channel_callbacks(ssh_channel channel, ssh_channel_callbacks callbacks) {
@@ -107,11 +105,10 @@ void install_gssapi_select_oid_callback(ssh_server_callbacks callbacks) { callba
 void install_gssapi_accept_sec_ctx_callback(ssh_server_callbacks callbacks) { callbacks->gssapi_accept_sec_ctx_function = gssapi_accept_sec_ctx_callback; }
 void install_gssapi_verify_mic_callback(ssh_server_callbacks callbacks) { callbacks->gssapi_verify_mic_function = gssapi_verify_mic_callback; }
 
-ssh_server_callbacks new_server_callbacks(int index) {
-	ssh_server_callbacks callbacks = (ssh_server_callbacks)(malloc(sizeof(struct ssh_server_callbacks_struct)));
-    memset(callbacks, 0, sizeof(struct ssh_server_callbacks_struct));
-	callbacks->userdata = (void *)((unsigned long)index);
-	return callbacks;
+ssh_server_callbacks new_server_callbacks() {
+    ssh_server_callbacks ptr = (ssh_server_callbacks) malloc(sizeof(struct ssh_server_callbacks_struct));
+    memset(ptr, 0, sizeof(*ptr));
+    return ptr;
 }
 
 int set_server_callbacks(ssh_session session, ssh_server_callbacks callbacks) {
@@ -120,7 +117,11 @@ int set_server_callbacks(ssh_session session, ssh_server_callbacks callbacks) {
 }
 
 extern void logging_callback(int priority, const char *function, const char *buffer, void *userdata);
-
 int set_log_callback() {
     return ssh_set_log_callback(logging_callback);
+}
+
+extern int event_callback(socket_t fd, int revents, void *userdata);
+int event_add_fd(ssh_event event, socket_t fd, short events, void *userdata) {
+    return ssh_event_add_fd(event, fd, events, event_callback, userdata);
 }
