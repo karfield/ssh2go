@@ -95,6 +95,14 @@ func (e *SshApiError) Error() string {
 	return fmt.Sprintf("libssh call %s() returns %s", e.fn, e.err)
 }
 
+func (e *SshApiError) ReturnCode(defaultValue int) int {
+	val, err := strconv.ParseInt(e.err, 10, 32)
+	if err != nil {
+		return defaultValue
+	}
+	return int(val)
+}
+
 func apiError(fn string, err interface{}) error {
 	errno := 0
 	if e, ok := err.(C.int); ok {

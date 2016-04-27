@@ -8,12 +8,29 @@ package libssh
 #include <inttypes.h>
 #include <sys/types.h>
 #include <libssh/libssh.h>
+
+struct pubkey_hash {
+	unsigned char *buffer;
+	size_t length;
+	int error;
+};
+
+
+int get_publickey_hash(const ssh_key key, enum ssh_publickey_hash_type type, struct pubkey_hash *hash) {
+	return ssh_get_publickey_hash(key, type, &hash->buffer, &hash->length);
+}
+
+char *export_base64_from_pubkey(const ssh_key key) {
+	char *pbuf;
+	if (ssh_pki_export_pubkey_base64(key, &pbuf) == SSH_OK) {
+		return pbuf;
+	}
+	return NULL;
+}
+
 */
 import "C"
-import (
-	"errors"
-	"unsafe"
-)
+import "errors"
 
 type Key struct {
 	key C.ssh_key
@@ -130,13 +147,12 @@ func ImportPublicKeyFromFile(filename string) (Key, error) {
 //  SSH_PUBLICKEY_HASH_MD5
 //
 func (k Key) Hash(typ int) ([]byte, error) {
-	var hash **C.uchar
-	var size *C.size_t
-	if C.ssh_get_publickey_hash(k.key, C.enum_ssh_publickey_hash_type(typ), hash, size) < 0 {
+	hash := &C.struct_pubkey_hash{}
+	if C.get_publickey_hash(k.key, C.enum_ssh_publickey_hash_type(typ), hash) < 0 {
 		return nil, errors.New("Key hash error")
 	}
-	defer C.ssh_clean_pubkey_hash(hash)
-	return copyData(*hash, *size), nil
+	defer C.ssh_clean_pubkey_hash(&hash.buffer)
+	return copyData(hash.buffer, hash.length), nil
 }
 
 // clean up the key and deallocate all existing keys
@@ -239,10 +255,9 @@ func (k Key) ExportAsPublicKey() (Key, error) {
 
 // Convert a public key to a base64 encoded key.
 func (k Key) ExportPubkeyBase64() string {
-	var base64_cstr **C.char
-	if C.ssh_pki_export_pubkey_base64(k.key, base64_cstr) == SSH_OK {
-		defer C.free(unsafe.Pointer(*base64_cstr))
-		return C.GoString(*base64_cstr)
+	if s := C.export_base64_from_pubkey(k.key); s != nil {
+		defer C.ssh_string_free_char(s)
+		return C.GoString(s)
 	}
 	return ""
 }

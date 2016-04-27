@@ -156,7 +156,6 @@ func handleClientConnection(session libssh.Session) {
 	// authenticating phase
 	for !authenticated || !channel.IsCreated() {
 		if err := eventLoop.Poll(3 * 60 * 1000); err != nil {
-			fmt.Println("authenticating timeout (3 min) or password error")
 			return
 		}
 	}

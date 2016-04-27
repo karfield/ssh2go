@@ -1,6 +1,7 @@
 #include <libssh/libssh.h>
 #include <libssh/callbacks.h>
 #include "_cgo_export.h"
+#include "callbacks.h"
 
 void set_password_buffer_by_index( char *buf, int index,  char value) {
 	buf[index] = value;
@@ -124,4 +125,32 @@ int set_log_callback() {
 extern int event_callback(socket_t fd, int revents, void *userdata);
 int event_add_fd(ssh_event event, socket_t fd, short events, void *userdata) {
     return ssh_event_add_fd(event, fd, events, event_callback, userdata);
+}
+
+/**
+ * server bind callbacks
+ */
+
+ssh_bind_callbacks_wrapper new_bind_callbacks() {
+    ssh_bind_callbacks_wrapper ptr = (ssh_bind_callbacks_wrapper) malloc(sizeof(*ptr));
+    memset(ptr, 0, sizeof(*ptr));
+    return ptr;
+}
+
+extern void bind_incoming_connection_callback(ssh_bind sshbind, void *userdata);
+void install_bind_incoming_connection_callback(ssh_bind_callbacks cbs) {
+    cbs->incoming_connection = bind_incoming_connection_callback;
+}
+
+void set_bind_callbacks(ssh_bind sshbind, ssh_bind_callbacks_wrapper w) {
+    ssh_callbacks_init(&w->callbacks);
+    ssh_bind_set_callbacks(sshbind, &w->callbacks, w->userdata);
+}
+
+/**
+ * message callback
+ */
+extern int bind_message_callback(ssh_session session, ssh_message msg, void *data);
+void set_session_message_callback(ssh_session session, void *userdata) {
+    ssh_set_message_callback(session, bind_message_callback, userdata);
 }

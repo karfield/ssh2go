@@ -10,12 +10,9 @@ package libssh
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 #include <libssh/callbacks.h>
+#include "callbacks.h"
 
-void bind_callbacks_init(ssh_bind_callbacks p) {
-	ssh_callbacks_init(p);
-}
-
-typedef int(*ssh_bind_message_callback)(ssh_session session, ssh_message msg, void *data);
+extern void set_session_message_callback(ssh_session session, void *userdata);
 */
 import "C"
 import (
@@ -103,13 +100,31 @@ func (b Bind) Listen() error {
 	return apiError("ssh_bind_listen", C.ssh_bind_listen(b.ptr))
 }
 
-func (b Bind) SetCallback(impls interface{}) error {
-	callbacks := C.struct_ssh_bind_callbacks_struct{}
-	if callback, ok := impls.(BindIncomingConnectionCallback); ok {
-		callbacks.incoming_connection = wrapBindIncomingConnectionCallback(callback)
+type BindCallbacks struct {
+	cbsptr               C.ssh_bind_callbacks_wrapper
+	OnIncomingConnection func(bind Bind)
+}
+
+func (callbacks *BindCallbacks) Free() {
+	if callbacks.cbsptr != nil {
+		C.free(unsafe.Pointer(callbacks.cbsptr))
+		callbacks.cbsptr = nil
 	}
-	C.bind_callbacks_init(&callbacks)
-	return apiError("ssh_bind_set_callbacks", C.ssh_bind_set_callbacks(b.ptr, &callbacks, nil))
+}
+
+//export bind_incoming_connection_callback
+func bind_incoming_connection_callback(bind C.ssh_bind, userdata unsafe.Pointer) {
+	callbacks := (*BindCallbacks)(userdata)
+	callbacks.OnIncomingConnection(Bind{bind})
+}
+
+func (b Bind) SetCallback(callbacks *BindCallbacks) error {
+	callbacks.cbsptr = C.new_bind_callbacks()
+	callbacks.cbsptr.userdata = unsafe.Pointer(callbacks)
+	if callbacks.OnIncomingConnection != nil {
+		C.install_bind_incoming_connection_callback(&callbacks.cbsptr.callbacks)
+	}
+	return apiError("ssh_bind_set_callbacks", C.set_bind_callbacks(b.ptr, callbacks.cbsptr))
 }
 
 func (b Bind) SetBlocking(blocking bool) {
@@ -159,13 +174,18 @@ func (s Session) SetAuthMethods(methods int) {
 
 // for server
 
-type BindMessageCallback func(session Session, msg Message) int
+type BindMessageCallback struct {
+	OnBindMessage func(session Session, msg Message) int
+}
 
-func (s Session) SetMessageCallback(callback BindMessageCallback) {
-	wrapper := func(sess C.ssh_session, msg C.ssh_message, userdata unsafe.Pointer) C.int {
-		return C.int(callback(Session{sess}, Message{msg}))
-	}
-	C.ssh_set_message_callback(s.ptr, C.ssh_bind_message_callback(unsafe.Pointer(&wrapper)), nil)
+//export bind_message_callback
+func bind_message_callback(sess C.ssh_session, msg C.ssh_message, userdata unsafe.Pointer) C.int {
+	callback := (*BindMessageCallback)(userdata)
+	return C.int(callback.OnBindMessage(Session{sess}, Message{msg}))
+}
+
+func (s Session) SetMessageCallback(callback *BindMessageCallback) {
+	C.set_session_message_callback(s.ptr, unsafe.Pointer(callback))
 }
 
 func (s Session) ExecuteMessageCallbacks() error {

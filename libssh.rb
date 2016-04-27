@@ -24,6 +24,7 @@ class Libssh < Formula
     args << "-DWITH_SERVER=ON"
     args << "-DWITH_SFTP=ON"
     args << "-DWITH_GCRYPT=ON"
+    args << "-DWITH_THREADS=ON"
 
     mkdir "build" do
       system "cmake", *args, ".."
